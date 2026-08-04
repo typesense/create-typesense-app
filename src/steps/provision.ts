@@ -5,6 +5,8 @@ import { writeComposeFile } from './compose.js'
 import { readEnvFile, writeEnvFile } from './env.js'
 import { composeUp, waitForHealth, type WaitForHealthOptions } from './server.js'
 import { generateAdminKey } from '../util/apiKey.js'
+import { composePull, missingImages } from '../util/docker.js'
+import { createPullTracker } from '../util/pullProgress.js'
 
 export interface ProvisionOptions {
   /** Progress callback, so the CLI can render a step per stage. */
@@ -77,6 +79,20 @@ export async function provisionServer(
       envFile: template.env.file,
     })
     onStep('Wrote docker-compose.yml (CORS enabled)')
+
+    // Pull as its own reported step. `compose up` would pull silently, leaving the
+    // spinner on a stale message for however long the download takes — which on a
+    // cold cache looks exactly like a hang.
+    const missing = await missingImages(targetDir)
+    if (missing.length > 0) {
+      const tracker = createPullTracker()
+      // "(first run)" explains why this particular run is the slow one.
+      const label = `${missing.join(', ')} (first run)`
+      onStep(tracker.describe(label))
+      await composePull(targetDir, (line) => {
+        if (tracker.ingest(line)) onStep(tracker.describe(label))
+      })
+    }
 
     await composeUp(targetDir)
     onStep(`Started Typesense on :${server.port}`)

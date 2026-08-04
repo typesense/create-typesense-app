@@ -75,6 +75,68 @@ export async function runCompose(projectDir: string, args: string[]): Promise<st
   }
 }
 
+/** Which images this compose file needs. Asks compose, so an edit cannot cause drift. */
+export async function composeImages(projectDir: string): Promise<string[]> {
+  const stdout = await runCompose(projectDir, ['config', '--images'])
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+}
+
+/** Local cache check only — never contacts a registry, so it stays fast and offline-safe. */
+export async function imageExists(image: string): Promise<boolean> {
+  try {
+    await execa('docker', ['image', 'inspect', image], { timeout: PROBE_TIMEOUT_MS })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Images the compose file needs that are not in the local cache yet. */
+export async function missingImages(projectDir: string): Promise<string[]> {
+  const images = await composeImages(projectDir)
+  const present = await Promise.all(images.map((image) => imageExists(image)))
+  return images.filter((_image, index) => present[index] === false)
+}
+
+/**
+ * Pulls the compose file's images, reporting each output line.
+ *
+ * Piped (non-TTY) compose emits one line per status change rather than an ANSI
+ * progress bar, which is what makes the pull reportable at all — see
+ * createPullTracker.
+ */
+export async function composePull(
+  projectDir: string,
+  onLine: (line: string) => void = () => {},
+): Promise<void> {
+  const subprocess = execa(
+    'docker',
+    ['compose', '--project-directory', projectDir, 'pull'],
+    { cwd: projectDir, timeout: 900_000, all: true, buffer: false },
+  )
+
+  for await (const line of subprocess.iterable({ from: 'all' })) {
+    onLine(String(line))
+  }
+
+  try {
+    await subprocess
+  } catch (error) {
+    throw new Error(`\`docker compose pull\` failed: ${messageOf(error)}`, { cause: error })
+  }
+}
+
+function messageOf(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'stderr' in error) {
+    const stderr = String((error as { stderr?: unknown }).stderr ?? '').trim()
+    if (stderr !== '') return stderr
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 function isNotFound(error: unknown): boolean {
   return (
     typeof error === 'object' &&
