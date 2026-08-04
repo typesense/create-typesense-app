@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { intro, log, note, outro } from '@clack/prompts'
+import { intro, log, note, outro, spinner } from '@clack/prompts'
 import pc from 'picocolors'
 import { USAGE, isInteractive, parseCliArgs, type CliArgs } from './cli.js'
-import { TYPESENSE_IMAGE } from './constants.js'
 import type { ProjectConfig } from './config.js'
 import { readPackageVersion } from './paths.js'
 import { resolveDefaults, runPrompts } from './prompts.js'
+import { provisionServer } from './steps/provision.js'
 import { assertAdminKeyNeverPublic, nextStepsLines, summaryLines } from './summary.js'
 import { loadTemplates } from './templates.js'
 import { checkDocker } from './util/docker.js'
@@ -67,12 +67,42 @@ async function main(): Promise<number> {
   assertAdminKeyNeverPublic(config.template.env.publicPrefix)
 
   note(summaryLines(config).join('\n'), 'Plan')
-  note(nextStepsLines(config).join('\n'), 'Then')
+
+  const progress = spinner()
+  progress.start('Starting Typesense')
+  let provisioned
+  try {
+    provisioned = await provisionServer(config, {
+      onStep: (step) => progress.message(step),
+    })
+  } catch (error) {
+    progress.error('Could not start Typesense')
+    log.error(messageOf(error))
+    return 1
+  }
+  progress.stop(`Typesense is healthy at ${provisioned.baseUrl}`)
+
+  if (provisioned.reusedAdminKey) {
+    log.info('Reused the admin API key from a previous run in this directory.')
+  }
+
+  // Not `npm run dev` yet — there is no app until the template step lands.
+  note(
+    [
+      `curl ${provisioned.baseUrl}/health`,
+      pc.dim('# {"ok":true}'),
+      '',
+      `cd ${config.projectName} && docker compose down --volumes`,
+      pc.dim('# tears down the container and its data volume'),
+    ].join('\n'),
+    'Try it',
+  )
 
   log.warn(
-    `${pc.bold('M0 — nothing was written.')} No directory created, no ${TYPESENSE_IMAGE} pulled.`,
+    `${pc.bold('M1 — the server is up; no collection and no app yet.')} ` +
+      'The search UI arrives with the template step.',
   )
-  outro(cli.yes ? 'Defaults resolved.' : 'Prompt flow complete.')
+  outro('Server ready.')
   return 0
 }
 

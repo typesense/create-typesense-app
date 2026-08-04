@@ -28,7 +28,16 @@ export const PORT_VAR = 'TYPESENSE_PORT'
 export const PROTOCOL_VAR = 'TYPESENSE_PROTOCOL'
 export const COLLECTION_VAR = 'TYPESENSE_COLLECTION'
 export const SEARCH_KEY_VAR = 'TYPESENSE_SEARCH_ONLY_API_KEY'
-export const ADMIN_KEY_VAR = 'TYPESENSE_ADMIN_API_KEY'
+
+/**
+ * Named exactly what the Typesense server reads from its own environment.
+ *
+ * That is not cosmetic: it lets docker-compose.yml pull the key in with
+ * `env_file:` instead of `${...}` substitution. Compose only interpolates from
+ * `.env`, so with a template whose env file is `.env.local` a substituting
+ * compose file made plain `docker compose down` fail.
+ */
+export const ADMIN_KEY_VAR = 'TYPESENSE_API_KEY'
 
 /** Receive the template's public prefix. The browser sees these. */
 export const PUBLIC_ENV_VARS = [

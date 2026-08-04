@@ -48,6 +48,33 @@ export async function checkDocker(): Promise<DockerStatus> {
   }
 }
 
+/**
+ * Single place every compose invocation goes through.
+ *
+ * Deliberately no `--env-file`: the generated compose file needs no interpolation,
+ * so what the CLI runs is exactly what we tell the user to run. If this ever needs
+ * a flag to work, the compose file is wrong.
+ */
+export async function runCompose(projectDir: string, args: string[]): Promise<string> {
+  try {
+    const result = await execa(
+      'docker',
+      ['compose', '--project-directory', projectDir, ...args],
+      { cwd: projectDir, timeout: 300_000 },
+    )
+    return result.stdout
+  } catch (error) {
+    const stderr =
+      typeof error === 'object' && error !== null && 'stderr' in error
+        ? String((error as { stderr?: unknown }).stderr ?? '').trim()
+        : ''
+    throw new Error(
+      `\`docker compose ${args.join(' ')}\` failed${stderr ? `:\n${stderr}` : '.'}`,
+      { cause: error },
+    )
+  }
+}
+
 function isNotFound(error: unknown): boolean {
   return (
     typeof error === 'object' &&

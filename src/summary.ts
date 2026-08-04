@@ -56,7 +56,7 @@ export function summaryLines(config: ProjectConfig): string[] {
       '  browser',
       PUBLIC_ENV_VARS.map((name) => `${template.env.publicPrefix}${name}`).join('\n'),
     ),
-    row('  server', `${PRIVATE_ENV_VARS.join(', ')} ${pc.dim('(never prefixed)')}`),
+    row('  server', `${PRIVATE_ENV_VARS.join(', ')} ${pc.dim('(admin — never prefixed)')}`),
   ]
 }
 

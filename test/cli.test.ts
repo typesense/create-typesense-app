@@ -108,6 +108,32 @@ describe('validateTargetDir', () => {
     expect(validateTargetDir(dir)).toMatch(/is not empty \(1 entry\)/)
   })
 
+  // A run that got as far as starting the container leaves these behind. Refusing
+  // to resume would make every failed run need a manual rm -rf.
+  it.each(['docker-compose.yml', '.env.local', '.env'])(
+    'accepts a directory containing only our own %s, so a failed run resumes',
+    (generated) => {
+      const dir = scratch()
+      writeFileSync(path.join(dir, generated), '')
+      expect(validateTargetDir(dir)).toBeUndefined()
+    },
+  )
+
+  it('accepts a directory holding the full set of our generated files', () => {
+    const dir = scratch()
+    writeFileSync(path.join(dir, 'docker-compose.yml'), '')
+    writeFileSync(path.join(dir, '.env.local'), '')
+    writeFileSync(path.join(dir, STATE_FILE), '{}')
+    expect(validateTargetDir(dir)).toBeUndefined()
+  })
+
+  it("still rejects a directory with somebody else's project in it", () => {
+    const dir = scratch()
+    writeFileSync(path.join(dir, 'docker-compose.yml'), '')
+    writeFileSync(path.join(dir, 'index.html'), '')
+    expect(validateTargetDir(dir)).toMatch(/is not empty/)
+  })
+
   it('rejects an existing file', () => {
     const dir = scratch()
     const file = path.join(dir, 'my-app')

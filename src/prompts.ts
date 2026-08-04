@@ -3,6 +3,7 @@ import path from 'node:path'
 import { cancel, isCancel, log, password, select, text } from '@clack/prompts'
 import pc from 'picocolors'
 import { DEFAULT_PORT, DEFAULT_PROJECT_NAME, STATE_FILE } from './constants.js'
+import { COMPOSE_FILE } from './steps/compose.js'
 import type { Dataset, ProjectConfig, ServerConfig } from './config.js'
 import type { TemplateManifest } from './templates.js'
 import type { DockerStatus } from './util/docker.js'
@@ -40,15 +41,22 @@ export function validateProjectName(value: string): string | undefined {
 }
 
 /**
- * A directory holding only our own state file is a resumed run (PLAN.md §7), not
- * a collision, so it is allowed.
+ * Files a previous run of this CLI leaves behind. A directory containing only
+ * these is a resumed run (PLAN.md §7), not a collision — otherwise every failed
+ * run would need a manual `rm -rf` before retrying.
+ *
+ * Env files are matched by pattern because the name is the template's choice.
  */
+function isOurOwnArtifact(entry: string): boolean {
+  if (['.git', '.DS_Store', STATE_FILE, COMPOSE_FILE].includes(entry)) return true
+  return /^\.env(\..+)?$/.test(entry)
+}
+
 export function validateTargetDir(dir: string): string | undefined {
   if (!existsSync(dir)) return undefined
   if (!statSync(dir).isDirectory()) return `${dir} already exists and is not a directory.`
 
-  const ignorable = new Set(['.git', '.DS_Store', STATE_FILE])
-  const entries = readdirSync(dir).filter((entry) => !ignorable.has(entry))
+  const entries = readdirSync(dir).filter((entry) => !isOurOwnArtifact(entry))
   if (entries.length > 0) {
     return `${path.basename(dir)}/ is not empty (${entries.length} ${
       entries.length === 1 ? 'entry' : 'entries'
