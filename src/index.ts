@@ -2,10 +2,12 @@
 import { intro, log, note, outro, spinner } from '@clack/prompts'
 import pc from 'picocolors'
 import { USAGE, isInteractive, parseCliArgs, type CliArgs } from './cli.js'
+import { DEMO_QUERY_BY } from './constants.js'
 import type { ProjectConfig } from './config.js'
 import { readPackageVersion } from './paths.js'
 import { resolveDefaults, runPrompts } from './prompts.js'
 import { provisionServer } from './steps/provision.js'
+import { setUpSearch } from './steps/searchSetup.js'
 import { assertAdminKeyNeverPublic, nextStepsLines, summaryLines } from './summary.js'
 import { loadTemplates } from './templates.js'
 import { checkDocker } from './util/docker.js'
@@ -86,11 +88,38 @@ async function main(): Promise<number> {
     log.info('Reused the admin API key from a previous run in this directory.')
   }
 
-  // Not `npm run dev` yet — there is no app until the template step lands.
+  const setup = spinner()
+  setup.start('Setting up search')
+  let search
+  try {
+    search = await setUpSearch(config, provisioned, {
+      onStep: (step) => setup.message(step),
+    })
+  } catch (error) {
+    setup.error('Could not set up the collection')
+    log.error(messageOf(error))
+    return 1
+  }
+  setup.stop(
+    search.documentsImported > 0
+      ? `Indexed ${search.documentsImported} documents into "${search.collection}"`
+      : `Created empty collection "${search.collection}"`,
+  )
+
+  if (search.verification.found > 0) {
+    log.success(
+      `Typo tolerance works: ${pc.bold(`"${search.verification.query}"`)} → ` +
+        `${pc.bold(search.verification.topHit)} (${search.verification.found} hits)`,
+    )
+  }
+
+  // The command a user would run by hand to convince themselves. It uses the
+  // browser-visible key deliberately: that is the whole point of the key split.
   note(
     [
-      `curl ${provisioned.baseUrl}/health`,
-      pc.dim('# {"ok":true}'),
+      pc.dim('# search with the browser-safe key — no admin key anywhere:'),
+      `curl '${provisioned.baseUrl}/collections/${search.collection}/documents/search?q=hary+potr&query_by=${DEMO_QUERY_BY}' \\`,
+      `  -H 'X-TYPESENSE-API-KEY: ${search.searchOnlyKey}'`,
       '',
       `cd ${config.projectName} && docker compose down --volumes`,
       pc.dim('# tears down the container and its data volume'),
@@ -99,10 +128,10 @@ async function main(): Promise<number> {
   )
 
   log.warn(
-    `${pc.bold('M1 — the server is up; no collection and no app yet.')} ` +
+    `${pc.bold('M2 — searchable, but there is no app yet.')} ` +
       'The search UI arrives with the template step.',
   )
-  outro('Server ready.')
+  outro('Search ready.')
   return 0
 }
 

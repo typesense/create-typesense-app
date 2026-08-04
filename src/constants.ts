@@ -14,6 +14,33 @@ export const DEFAULT_PORT = 8108
 /** v1 is single-collection by design (PLAN.md §2). */
 export const COLLECTION_NAME = 'books'
 
+/**
+ * Documents in data/books.jsonl. Used in prompt and summary copy; a test asserts
+ * it matches the file, so the number the user is shown cannot go stale.
+ */
+export const DATASET_DOCUMENT_COUNT = 225
+
+// --- The demo search ---------------------------------------------------------
+
+/**
+ * Fields the demo searches, and the reason it is two fields rather than one.
+ *
+ * With `query_by=title` alone, "hary potr" ranks *Project Hail Mary* above every
+ * Harry Potter book: no document matches both typo'd tokens at once, so Typesense
+ * drops a token and "hary" then matches "Mary" as well as "Harry". Searching
+ * title and authors together returns exactly the seven Harry Potter books.
+ *
+ * The template's search UI must use the same value, or the aha moment breaks in
+ * the browser while every CLI check still passes.
+ */
+export const DEMO_QUERY_BY = 'title,authors'
+
+/** The one facet the demo UI shows (PLAN.md §6). */
+export const DEMO_FACET_BY = 'genres'
+
+/** The misspelling the whole project is built to answer. */
+export const TYPO_DEMO_QUERY = 'hary potr'
+
 /** Written to the project dir to make re-runs resumable (PLAN.md §7). */
 export const STATE_FILE = '.create-typesense-app.json'
 

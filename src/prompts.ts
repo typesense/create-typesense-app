@@ -2,7 +2,12 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { cancel, isCancel, log, password, select, text } from '@clack/prompts'
 import pc from 'picocolors'
-import { DEFAULT_PORT, DEFAULT_PROJECT_NAME, STATE_FILE } from './constants.js'
+import {
+  DATASET_DOCUMENT_COUNT,
+  DEFAULT_PORT,
+  DEFAULT_PROJECT_NAME,
+  STATE_FILE,
+} from './constants.js'
 import { COMPOSE_FILE } from './steps/compose.js'
 import type { Dataset, ProjectConfig, ServerConfig } from './config.js'
 import type { TemplateManifest } from './templates.js'
@@ -199,7 +204,11 @@ async function askDataset(): Promise<Dataset> {
     await select<Dataset>({
       message: 'Sample data?',
       options: [
-        { value: 'books', label: 'Books', hint: '1k titles, best for seeing typo tolerance' },
+        {
+          value: 'books',
+          label: 'Books',
+          hint: `${DATASET_DOCUMENT_COUNT} titles, best for seeing typo tolerance`,
+        },
         { value: 'empty', label: 'Empty', hint: "I'll bring my own JSON" },
       ],
     }),

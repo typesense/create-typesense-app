@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  connectionEnvValues,
   envVarName,
   parseEnvContents,
   readEnvFile,
   upsertEnvContents,
   writeEnvFile,
 } from '../src/steps/env.js'
-import { ADMIN_KEY_VAR, HOST_VAR, SEARCH_KEY_VAR } from '../src/constants.js'
+import { ADMIN_KEY_VAR, HOST_VAR, PUBLIC_ENV_VARS, SEARCH_KEY_VAR } from '../src/constants.js'
 
 function scratch(): string {
   return mkdtempSync(path.join(tmpdir(), 'cta-env-'))
@@ -154,5 +155,58 @@ describe('readEnvFile', () => {
     const file = path.join(scratch(), '.env.local')
     await writeEnvFile(file, { [ADMIN_KEY_VAR]: 'abc' }, 'NEXT_PUBLIC_')
     expect((await readEnvFile(file))[ADMIN_KEY_VAR]).toBe('abc')
+  })
+})
+
+describe('connectionEnvValues', () => {
+  it('splits a local URL into host, port and protocol', () => {
+    expect(connectionEnvValues('http://127.0.0.1:8108', 'books', 'search-key')).toEqual({
+      TYPESENSE_HOST: '127.0.0.1',
+      TYPESENSE_PORT: '8108',
+      TYPESENSE_PROTOCOL: 'http',
+      TYPESENSE_COLLECTION: 'books',
+      TYPESENSE_SEARCH_ONLY_API_KEY: 'search-key',
+    })
+  })
+
+  it('fills in 443 for an https URL with no explicit port', () => {
+    const values = connectionEnvValues('https://abc.a1.typesense.net', 'books', 'k')
+    expect(values).toMatchObject({
+      TYPESENSE_HOST: 'abc.a1.typesense.net',
+      TYPESENSE_PORT: '443',
+      TYPESENSE_PROTOCOL: 'https',
+    })
+  })
+
+  it('fills in 80 for a bare http URL', () => {
+    expect(connectionEnvValues('http://localhost', 'books', 'k').TYPESENSE_PORT).toBe('80')
+  })
+
+  it('keeps an explicit non-default port', () => {
+    expect(connectionEnvValues('https://example.com:9443', 'books', 'k').TYPESENSE_PORT).toBe('9443')
+  })
+
+  it('never emits the admin key', () => {
+    const values = connectionEnvValues('http://127.0.0.1:8108', 'books', 'search-key')
+    expect(Object.keys(values)).not.toContain(ADMIN_KEY_VAR)
+  })
+
+  it('emits only names the public list knows, so every one gets prefixed', () => {
+    const values = connectionEnvValues('http://127.0.0.1:8108', 'books', 'k')
+    for (const name of Object.keys(values)) {
+      expect(PUBLIC_ENV_VARS).toContain(name)
+    }
+  })
+
+  it('round-trips through the writer with every value prefixed', () => {
+    const values = connectionEnvValues('http://127.0.0.1:8108', 'books', 'search-key')
+    const contents = upsertEnvContents('', values, 'NEXT_PUBLIC_')
+    for (const name of Object.keys(values)) {
+      expect(contents).toMatch(new RegExp(`^NEXT_PUBLIC_${name}=`, 'm'))
+    }
+  })
+
+  it('rejects a URL it cannot parse rather than writing rubbish', () => {
+    expect(() => connectionEnvValues('not-a-url', 'books', 'k')).toThrow()
   })
 })

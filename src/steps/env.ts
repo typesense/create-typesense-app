@@ -1,6 +1,14 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { PRIVATE_ENV_VARS, PUBLIC_ENV_VARS } from '../constants.js'
+import {
+  COLLECTION_VAR,
+  HOST_VAR,
+  PORT_VAR,
+  PRIVATE_ENV_VARS,
+  PROTOCOL_VAR,
+  PUBLIC_ENV_VARS,
+  SEARCH_KEY_VAR,
+} from '../constants.js'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -82,6 +90,34 @@ export function parseEnvContents(contents: string): Record<string, string> {
 export async function readEnvFile(filePath: string): Promise<Record<string, string>> {
   const contents = await readFile(filePath, 'utf8').catch(() => '')
   return parseEnvContents(contents)
+}
+
+/**
+ * The browser-visible connection details, derived from the server URL so the CLI
+ * and the template cannot disagree about where Typesense is.
+ *
+ * Every name returned is on PUBLIC_ENV_VARS, so the writer prefixes all of them.
+ * The admin key is deliberately not here — it is written separately, unprefixed.
+ */
+export function connectionEnvValues(
+  baseUrl: string,
+  collection: string,
+  searchOnlyKey: string,
+): Record<string, string> {
+  const url = new URL(baseUrl)
+  const protocol = url.protocol.replace(/:$/, '')
+  if (protocol !== 'http' && protocol !== 'https') {
+    throw new Error(`Unsupported protocol "${url.protocol}" in server URL ${baseUrl}`)
+  }
+
+  return {
+    [HOST_VAR]: url.hostname,
+    // URL leaves `port` empty for a default port, but the client needs a number.
+    [PORT_VAR]: url.port === '' ? (protocol === 'https' ? '443' : '80') : url.port,
+    [PROTOCOL_VAR]: protocol,
+    [COLLECTION_VAR]: collection,
+    [SEARCH_KEY_VAR]: searchOnlyKey,
+  }
 }
 
 export async function writeEnvFile(
