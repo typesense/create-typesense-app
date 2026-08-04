@@ -1,0 +1,10 @@
+// Typechecks the test suite too. vitest transpiles without typechecking, so
+// without this the tests would only be checked at runtime.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "test"]
+}

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    // TypeScript 7 does not pull in @types/* implicitly.
+    "types": ["node"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "sourceMap": true,
+    "declaration": false,
+    "skipLibCheck": true,
+    "noEmitOnError": true
+  },
+  "include": ["src"]
+}

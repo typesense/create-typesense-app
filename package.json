@@ -1,0 +1,43 @@
+{
+  "name": "create-typesense-app",
+  "version": "0.0.0",
+  "description": "Scaffold a working Typesense search-as-you-type app in one command.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "create-typesense-app": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "data"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "typesense",
+    "search",
+    "instantsearch",
+    "scaffold",
+    "create-app"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "execa": "^10.0.1",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
