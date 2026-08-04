@@ -3,7 +3,7 @@ import path from 'node:path'
 import { cancel, isCancel, log, password, select, text } from '@clack/prompts'
 import pc from 'picocolors'
 import {
-  DATASET_DOCUMENT_COUNT,
+  DATASET_APPROX_COUNT,
   DEFAULT_PORT,
   DEFAULT_PROJECT_NAME,
   STATE_FILE,
@@ -21,6 +21,8 @@ export interface PromptOptions {
   projectName?: string
   /** Pre-filled from `--template`, skips the framework prompt. */
   templateId?: string
+  /** Pre-filled from `--dataset`, skips the sample-data prompt. */
+  dataset?: Dataset
   port: number
 }
 
@@ -53,7 +55,8 @@ export function validateProjectName(value: string): string | undefined {
  * Env files are matched by pattern because the name is the template's choice.
  */
 function isOurOwnArtifact(entry: string): boolean {
-  if (['.git', '.DS_Store', STATE_FILE, COMPOSE_FILE].includes(entry)) return true
+  // 'data' holds the downloaded dataset and the copied schema.
+  if (['.git', '.DS_Store', STATE_FILE, COMPOSE_FILE, 'data'].includes(entry)) return true
   return /^\.env(\..+)?$/.test(entry)
 }
 
@@ -207,7 +210,7 @@ async function askDataset(): Promise<Dataset> {
         {
           value: 'books',
           label: 'Books',
-          hint: `${DATASET_DOCUMENT_COUNT} titles, best for seeing typo tolerance`,
+          hint: `${DATASET_APPROX_COUNT} real titles, downloaded — best for seeing typo tolerance`,
         },
         { value: 'empty', label: 'Empty', hint: "I'll bring my own JSON" },
       ],
@@ -224,7 +227,7 @@ export async function runPrompts(options: PromptOptions): Promise<ProjectConfig>
   const projectName = await askProjectName(options)
   const template = await askTemplate(options)
   const server = await askServer(options)
-  const dataset = await askDataset()
+  const dataset = options.dataset ?? (await askDataset())
 
   return {
     projectName,
@@ -269,6 +272,6 @@ export function resolveDefaults(options: PromptOptions): ProjectConfig {
     targetDir,
     template,
     server: { kind: 'docker', port: options.port },
-    dataset: 'books',
+    dataset: options.dataset ?? 'books',
   }
 }

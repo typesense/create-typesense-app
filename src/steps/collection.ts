@@ -9,13 +9,16 @@ export const DATASET_FILE = 'books.jsonl'
 
 export interface CollectionSchema {
   name: string
-  fields: Record<string, unknown>[]
+  fields: { name: string; type: string; facet?: boolean; optional?: boolean }[]
   default_sorting_field?: string
 }
 
 /**
  * Reads the bundled schema, forcing the collection name to the CLI's constant so
  * the file and the code cannot drift apart.
+ *
+ * The schema stays bundled even though the data is fetched: it is ours, it is
+ * tiny, and PLAN.md §6 wants it sitting in the project inviting edits.
  */
 export async function loadBooksSchema(): Promise<CollectionSchema> {
   const raw = await readFile(path.join(dataDir, SCHEMA_FILE), 'utf8')
@@ -28,20 +31,13 @@ export async function loadBooksSchema(): Promise<CollectionSchema> {
   return { ...parsed, name: COLLECTION_NAME }
 }
 
-export async function loadBooksJsonl(): Promise<string> {
-  return readFile(path.join(dataDir, DATASET_FILE), 'utf8')
-}
-
-/** Copies the sample data into the user's project so their own seed script can use it. */
-export async function copyDatasetInto(targetDir: string): Promise<string> {
+/** Puts the schema in the user's project — the file PLAN.md §6 wants them to edit first. */
+export async function copySchemaInto(targetDir: string): Promise<string> {
   const destinationDir = path.join(targetDir, 'data')
   await mkdir(destinationDir, { recursive: true })
-
-  for (const file of [DATASET_FILE, SCHEMA_FILE]) {
-    await copyFile(path.join(dataDir, file), path.join(destinationDir, file))
-  }
-
-  return destinationDir
+  const destination = path.join(destinationDir, SCHEMA_FILE)
+  await copyFile(path.join(dataDir, SCHEMA_FILE), destination)
+  return destination
 }
 
 export interface RecreateOutcome {

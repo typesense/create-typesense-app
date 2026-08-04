@@ -3,7 +3,7 @@ import pc from 'picocolors'
 import {
   ADMIN_KEY_VAR,
   COLLECTION_NAME,
-  DATASET_DOCUMENT_COUNT,
+  DATASET_APPROX_COUNT,
   PRIVATE_ENV_VARS,
   PUBLIC_ENV_VARS,
   TYPESENSE_IMAGE,
@@ -47,7 +47,7 @@ export function summaryLines(config: ProjectConfig): string[] {
     row(
       'Collection',
       config.dataset === 'books'
-        ? `"${COLLECTION_NAME}" + ${DATASET_DOCUMENT_COUNT} sample titles`
+        ? `"${COLLECTION_NAME}" + ${DATASET_APPROX_COUNT} titles (downloaded)`
         : 'none (empty — bring your own JSON)',
     ),
     row('Install', template.deps.join(', ')),

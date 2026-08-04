@@ -54,6 +54,7 @@ async function main(): Promise<number> {
     cwd: process.cwd(),
     projectName: cli.projectName,
     templateId: cli.templateId,
+    dataset: cli.dataset,
     port: cli.port,
   }
 

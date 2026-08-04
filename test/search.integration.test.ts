@@ -97,8 +97,25 @@ describe.skipIf(!docker.available)('search with only the search-only key', () =>
     expect(String(result.hits[0]?.document['title'])).toContain('Harry Potter')
   })
 
-  it('indexed the whole dataset', () => {
-    expect(setup.documentsImported).toBeGreaterThan(200)
+  it('indexed the whole downloaded dataset', () => {
+    expect(setup.documentsImported).toBeGreaterThan(5_000)
+  })
+
+  it('ranks the best-known book first, via ratings_count', async () => {
+    const result = await browserClient().search(COLLECTION_NAME, {
+      q: TYPO_DEMO_QUERY,
+      query_by: DEMO_QUERY_BY,
+    })
+    expect(String(result.hits[0]?.document['title'])).toContain("Philosopher's Stone")
+    expect(Number(result.hits[0]?.document['ratings_count'])).toBeGreaterThan(1_000_000)
+  })
+
+  it('carries cover images, so the UI can show them', async () => {
+    const result = await browserClient().search(COLLECTION_NAME, {
+      q: TYPO_DEMO_QUERY,
+      query_by: DEMO_QUERY_BY,
+    })
+    expect(String(result.hits[0]?.document['image_url'])).toMatch(/^https:/)
   })
 
   /** The CLI proves the aha moment itself before reporting success. */
@@ -127,7 +144,8 @@ describe.skipIf(!docker.available)('search with only the search-only key', () =>
       query_by: DEMO_QUERY_BY,
       facet_by: DEMO_FACET_BY,
     })
-    expect(result.found).toBeGreaterThan(200)
+    expect(result.found).toBeGreaterThan(5_000)
+    expect(result.facet_counts?.[0]?.counts?.length ?? 0).toBeGreaterThan(0)
   })
 })
 
@@ -205,6 +223,7 @@ describe.skipIf(!docker.available)('re-running', () => {
 
     expect(second.replacedCollection).toBe(true)
     expect(second.documentsImported).toBe(setup.documentsImported)
+    // The dataset was cached in the project, so no second download.
 
     const result = await createTypesenseClient(server.baseUrl, second.searchOnlyKey).search(
       COLLECTION_NAME,

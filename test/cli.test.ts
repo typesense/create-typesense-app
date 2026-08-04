@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isInteractive, parseCliArgs } from '../src/cli.js'
+import { USAGE, isInteractive, parseCliArgs } from '../src/cli.js'
 import { DEFAULT_PORT, STATE_FILE } from '../src/constants.js'
 import { validateProjectName, validateTargetDir } from '../src/prompts.js'
 
@@ -124,6 +124,18 @@ describe('validateTargetDir', () => {
     writeFileSync(path.join(dir, 'docker-compose.yml'), '')
     writeFileSync(path.join(dir, '.env.local'), '')
     writeFileSync(path.join(dir, STATE_FILE), '{}')
+    mkdirSync(path.join(dir, 'data'))
+    expect(validateTargetDir(dir)).toBeUndefined()
+  })
+
+  /**
+   * Regression: the downloaded dataset and the copied schema land in data/, so a
+   * completed run leaves that directory behind and the next run refused to start.
+   */
+  it('accepts a directory containing only the data/ directory we create', () => {
+    const dir = scratch()
+    mkdirSync(path.join(dir, 'data'))
+    writeFileSync(path.join(dir, 'data', 'books.jsonl'), '{}')
     expect(validateTargetDir(dir)).toBeUndefined()
   })
 
@@ -139,5 +151,24 @@ describe('validateTargetDir', () => {
     const file = path.join(dir, 'my-app')
     writeFileSync(file, '')
     expect(validateTargetDir(file)).toMatch(/is not a directory/)
+  })
+})
+
+describe('--dataset', () => {
+  it('defaults to undefined, so the prompt or the default decides', () => {
+    expect(parseCliArgs([]).dataset).toBeUndefined()
+  })
+
+  it.each(['books', 'empty'])('accepts %s', (name) => {
+    expect(parseCliArgs(['--dataset', name]).dataset).toBe(name)
+  })
+
+  // The download-failure message tells the user to run this, so it must exist.
+  it('rejects an unknown dataset name', () => {
+    expect(() => parseCliArgs(['--dataset', 'movies'])).toThrow(/Unknown dataset "movies"/)
+  })
+
+  it('is advertised in the usage text', () => {
+    expect(USAGE).toContain('--dataset')
   })
 })

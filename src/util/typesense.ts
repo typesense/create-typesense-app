@@ -29,6 +29,7 @@ export interface StoredKey {
 export interface SearchResponse {
   found: number
   hits: { document: Record<string, unknown> }[]
+  facet_counts?: { field_name: string; counts: { value: string; count: number }[] }[]
 }
 
 export class TypesenseError extends Error {

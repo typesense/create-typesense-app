@@ -1,13 +1,10 @@
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { COLLECTION_NAME, DEMO_QUERY_BY, TYPO_DEMO_QUERY } from '../constants.js'
 import type { ProjectConfig } from '../config.js'
 import { createTypesenseClient } from '../util/typesense.js'
-import {
-  copyDatasetInto,
-  loadBooksJsonl,
-  loadBooksSchema,
-  recreateCollection,
-} from './collection.js'
+import { copySchemaInto, loadBooksSchema, recreateCollection } from './collection.js'
+import { ensureDataset } from './dataset.js'
 import { connectionEnvValues, writeEnvFile } from './env.js'
 import { createSearchOnlyKey } from './keys.js'
 import type { ProvisionedServer } from './provision.js'
@@ -56,16 +53,24 @@ export async function setUpSearch(
   const { replaced } = await recreateCollection(admin, schema)
   onStep(`${replaced ? 'Recreated' : 'Created'} collection "${schema.name}"`)
 
+  // The schema goes in even for an empty collection: it is the file to edit first.
+  await copySchemaInto(targetDir)
+
   let documentsImported = 0
   let datasetDir: string | undefined
   if (config.dataset === 'books') {
-    const outcome = await seedCollection(admin, schema.name, await loadBooksJsonl())
+    // Fetched, not bundled. Lands directly in the project so the user's own seed
+    // script can re-run it offline.
+    const dataset = await ensureDataset(targetDir, { onProgress: onStep })
+    datasetDir = path.dirname(dataset.path)
+
+    const outcome = await seedCollection(
+      admin,
+      schema.name,
+      await readFile(dataset.path, 'utf8'),
+    )
     documentsImported = outcome.imported
     onStep(`Indexed ${documentsImported} documents`)
-
-    // The user's own seed script needs the data, so it lands in their project too.
-    datasetDir = await copyDatasetInto(targetDir)
-    onStep(`Copied the sample data into ${path.basename(datasetDir)}/`)
   }
 
   const searchOnlyKey = await createSearchOnlyKey(admin, schema.name)

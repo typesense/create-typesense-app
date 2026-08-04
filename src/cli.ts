@@ -26,6 +26,7 @@ ${pc.bold('Usage')}
 
 ${pc.bold('Options')}
   -t, --template <id>   ${TEMPLATE_IDS.join(' | ')}
+      --dataset <name>  books (default) | empty — skips the sample data download
       --port <number>   host port for the local Docker server (default ${DEFAULT_PORT})
   -y, --yes             accept defaults: ${TEMPLATE_IDS[0]}, local Docker, books dataset
   -h, --help            show this
@@ -40,6 +41,7 @@ ${pc.bold('Examples')}
 export interface CliArgs {
   projectName?: string
   templateId?: string
+  dataset?: 'books' | 'empty'
   port: number
   yes: boolean
   help: boolean
@@ -55,6 +57,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
     args: argv,
     options: {
       template: { type: 'string', short: 't' },
+      dataset: { type: 'string' },
       port: { type: 'string' },
       yes: { type: 'boolean', short: 'y', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -75,6 +78,10 @@ export function parseCliArgs(argv: string[]): CliArgs {
     )
   }
 
+  if (values.dataset !== undefined && !['books', 'empty'].includes(values.dataset)) {
+    throw new Error(`Unknown dataset "${values.dataset}". Available: books, empty`)
+  }
+
   let port = DEFAULT_PORT
   if (values.port !== undefined) {
     port = Number(values.port)
@@ -86,6 +93,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   return {
     projectName: positionals[0],
     templateId: values.template,
+    dataset: values.dataset as 'books' | 'empty' | undefined,
     port,
     yes: values.yes,
     help: values.help,
