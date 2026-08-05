@@ -18,7 +18,7 @@ function BookHit({ hit }: { hit: Book }) {
     <article className={styles.hit}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className={styles.cover} src={hit.image_url} alt="" loading="lazy" />
-      <div>
+      <div className={styles.hitBody}>
         <h2 className={styles.title}>{hit.title}</h2>
         <p className={styles.meta}>
           {hit.authors.join(', ')} · {hit.publication_year}

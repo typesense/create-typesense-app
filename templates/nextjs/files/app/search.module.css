@@ -2,6 +2,21 @@
    left exactly as create-next-app generated them. */
 
 .page {
+  /*
+   * `width: 100%` is not redundant, and removing it breaks the page in a way that
+   * is easy to misread as a search bug.
+   *
+   * The scaffold's own globals.css sets `body { display: flex; flex-direction:
+   * column }`, which makes this element a flex item. Auto margins in the cross
+   * axis suppress the default `align-items: stretch`, so without an explicit
+   * width the element is sized to fit-content — and its width then tracks
+   * whatever the current results happen to be. Typing would resize the search box
+   * and shift the whole layout sideways on every keystroke.
+   *
+   * Setting the width explicitly makes the layout independent of both the result
+   * set and whatever the framework's stylesheet does to body.
+   */
+  width: 100%;
   max-width: 60rem;
   margin: 0 auto;
   padding: 3rem 1.5rem 6rem;
@@ -53,14 +68,21 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 14rem 1fr;
+  /*
+   * minmax(0, 1fr) rather than 1fr: a bare `1fr` means `minmax(auto, 1fr)`, and
+   * that `auto` floor is the column's min-content width. One long title — the
+   * dataset has "The Seven-Percent Solution: Being a Reprint from the
+   * Reminiscences of John H. Watson, MD" — would then force the column wider than
+   * its share and squeeze the facet sidebar.
+   */
+  grid-template-columns: 14rem minmax(0, 1fr);
   gap: 2.5rem;
   align-items: start;
 }
 
 @media (max-width: 40rem) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
   }
 }
@@ -160,11 +182,18 @@
   flex-shrink: 0;
 }
 
+/* Flex items refuse to shrink below their content by default; without this a long
+   title pushes the cover image out of the row instead of wrapping. */
+.hitBody {
+  min-width: 0;
+}
+
 .title {
   font-size: 1rem;
   font-weight: 600;
   margin: 0 0 0.2rem;
   line-height: 1.3;
+  overflow-wrap: break-word;
 }
 
 .meta {

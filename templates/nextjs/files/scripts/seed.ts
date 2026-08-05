@@ -10,9 +10,17 @@
  * TYPESENSE_API_KEY, with no NEXT_PUBLIC_ prefix — so Next.js never bundles it
  * into anything the browser downloads.
  */
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { booksSchema, collectionName } from './schema'
+
+/**
+ * Tags the browser-safe key so this script can find its own and avoid piling up a
+ * new one on every run. Must match what create-typesense-app uses.
+ */
+const SEARCH_KEY_DESCRIPTION = 'create-typesense-app search-only key'
+const ENV_FILE = '.env.local'
+const SEARCH_KEY_VAR = 'NEXT_PUBLIC_TYPESENSE_SEARCH_ONLY_API_KEY'
 
 /**
  * Reads .env.local into process.env.
@@ -111,7 +119,69 @@ async function main(): Promise<void> {
   }
 
   console.log(`  indexed ${imported} documents`)
+
+  await ensureSearchOnlyKey(typesense)
+
   console.log('\nDone. Try searching for "hary potr".')
+}
+
+/**
+ * Makes sure the browser still has a working key, recreating it if it is gone.
+ *
+ * `docker compose down --volumes` deletes API keys along with the index, and
+ * Typesense only ever reveals a key's value at creation time — so a wiped key
+ * cannot be recovered, only replaced. Without this the app would come back with a
+ * 401 that no amount of reseeding fixed.
+ *
+ * Note what the key is allowed to do: search documents, in one collection. That is
+ * the only key the browser ever receives.
+ */
+async function ensureSearchOnlyKey(
+  typesense: (method: string, endpoint: string, body?: string, contentType?: string) => Promise<string>,
+): Promise<void> {
+  const configured = process.env[SEARCH_KEY_VAR] ?? ''
+
+  const { keys = [] } = JSON.parse(await typesense('GET', '/keys')) as {
+    keys?: { id: number; description: string; value_prefix: string }[]
+  }
+  const ours = keys.filter((key) => key.description === SEARCH_KEY_DESCRIPTION)
+
+  // Typesense exposes only a prefix of an existing key, which is enough to tell
+  // whether the one in the env file is still the live one.
+  const stillValid =
+    configured !== '' && ours.some((key) => configured.startsWith(key.value_prefix))
+  if (stillValid) return
+
+  for (const key of ours) {
+    await typesense('DELETE', `/keys/${key.id}`)
+  }
+
+  const created = JSON.parse(
+    await typesense(
+      'POST',
+      '/keys',
+      JSON.stringify({
+        description: SEARCH_KEY_DESCRIPTION,
+        actions: ['documents:search'],
+        collections: [collectionName],
+      }),
+    ),
+  ) as { value?: string }
+
+  if (created.value === undefined || created.value === '') {
+    throw new Error('Typesense created a search-only key but returned no value for it.')
+  }
+
+  const contents = await readFile(ENV_FILE, 'utf8').catch(() => '')
+  const line = `${SEARCH_KEY_VAR}=${created.value}`
+  const lines = contents === '' ? [] : contents.replace(/\n+$/, '').split('\n')
+  const index = lines.findIndex((existing) => existing.startsWith(`${SEARCH_KEY_VAR}=`))
+  if (index === -1) lines.push(line)
+  else lines[index] = line
+  await writeFile(ENV_FILE, `${lines.join('\n')}\n`, 'utf8')
+
+  console.log(`  created a new search-only key and updated ${ENV_FILE}`)
+  console.log('    (restart the dev server so it picks up the new value)')
 }
 
 main().catch((error: unknown) => {
