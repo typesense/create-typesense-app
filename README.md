@@ -6,6 +6,8 @@ Get a working Typesense search UI in about 30 seconds.
 npx create-typesense-app@latest
 ```
 
+![Next.js installed, the server reporting healthy, 9979 books indexed, and "hary potr" finding Harry Potter](docs/demo.gif)
+
 You get a Next.js app, Typesense running in Docker with CORS set up, roughly
 10,000 books indexed, and a search-only API key scoped to one collection. The
 admin key stays out of the browser.
@@ -103,4 +105,3 @@ npm run build
 
 ---
 
-Independent community project. Not affiliated with Typesense, Inc.
