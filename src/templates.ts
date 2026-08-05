@@ -22,6 +22,8 @@ export interface TemplateManifest {
   /** Command that creates the base project. Must contain `{{dir}}`. */
   scaffold: string
   deps: string[]
+  /** Installed with --save-dev. May be empty. */
+  devDeps: string[]
   env: TemplateEnv
   /** Overlay directory, relative to the template dir. */
   files: string
@@ -47,6 +49,7 @@ const MANIFEST_KEYS = [
   'name',
   'scaffold',
   'deps',
+  'devDeps',
   'env',
   'files',
   'devCommand',
@@ -142,6 +145,20 @@ function validateDeps(raw: unknown, source: string): string[] {
   })
 }
 
+/** Optional, unlike deps: a template may need no extra tooling. */
+function validateDevDeps(raw: unknown, source: string): string[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) {
+    throw new TemplateManifestError(source, '"devDeps" must be an array when present')
+  }
+  return raw.map((dep, index) => {
+    if (typeof dep !== 'string' || dep.trim() === '') {
+      throw new TemplateManifestError(source, `"devDeps[${index}]" must be a non-empty string`)
+    }
+    return dep
+  })
+}
+
 /**
  * The whole contract check, as a pure function so it can be unit tested without
  * touching the filesystem.
@@ -180,6 +197,7 @@ export function validateManifest(raw: unknown, source: string): TemplateManifest
     name: requireString(raw, 'name', source),
     scaffold,
     deps: validateDeps(raw['deps'], source),
+    devDeps: validateDevDeps(raw['devDeps'], source),
     env: validateEnv(raw['env'], source),
     files: requireRelativePath(requireString(raw, 'files', source), 'files', source),
     devCommand: requireString(raw, 'devCommand', source),

@@ -64,8 +64,11 @@ export function summaryLines(config: ProjectConfig): string[] {
 export function nextStepsLines(config: ProjectConfig): string[] {
   return [
     `cd ${config.projectName}`,
-    config.template.devCommand,
-    pc.dim(`# then open ${config.template.devUrl} and type "hary potr"`),
+    `${config.template.devCommand}${pc.dim(`   # ${config.template.devUrl} — type "hary potr"`)}`,
+    '',
+    `npm run seed${pc.dim('             # rebuild the collection from data/books.jsonl')}`,
+    `npm run typesense:down${pc.dim('   # stop the server, keeping the indexed data')}`,
+    pc.dim('docker compose down --volumes   # ...or stop it and wipe the data too'),
   ]
 }
 

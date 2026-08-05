@@ -9,6 +9,7 @@ import {
   STATE_FILE,
 } from './constants.js'
 import { COMPOSE_FILE } from './steps/compose.js'
+import { hasRunState } from './util/state.js'
 import type { Dataset, ProjectConfig, ServerConfig } from './config.js'
 import type { TemplateManifest } from './templates.js'
 import type { DockerStatus } from './util/docker.js'
@@ -63,6 +64,12 @@ function isOurOwnArtifact(entry: string): boolean {
 export function validateTargetDir(dir: string): string | undefined {
   if (!existsSync(dir)) return undefined
   if (!statSync(dir).isDirectory()) return `${dir} already exists and is not a directory.`
+
+  // A run that crashed part-way left its marker: resuming is exactly what should
+  // happen, whatever else is in there (PLAN.md §7). This is the precise signal —
+  // the filename matching below is only a fallback for a run that failed before
+  // the marker could be written.
+  if (hasRunState(dir)) return undefined
 
   const entries = readdirSync(dir).filter((entry) => !isOurOwnArtifact(entry))
   if (entries.length > 0) {

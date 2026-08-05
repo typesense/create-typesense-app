@@ -28,6 +28,7 @@ allowlist and this table.
 | `name` | string | shown in the framework prompt |
 | `scaffold` | string | shell command; **must** contain `{{dir}}` |
 | `deps` | string[] | installed after scaffolding; non-empty |
+| `devDeps` | string[] | optional; installed with `--save-dev` (e.g. the TypeScript runner for `scripts/seed.ts`) |
 | `env.file` | string | relative path, e.g. `.env.local` |
 | `env.publicPrefix` | string | SCREAMING_SNAKE_CASE, **must** end with `_` |
 | `env.accessor` | string | how template code reads env, e.g. `process.env` |

@@ -1,0 +1,181 @@
+/* Scoped to the search page, so the scaffold's globals.css and layout.tsx are
+   left exactly as create-next-app generated them. */
+
+.page {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.heading {
+  font-size: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.35rem;
+  text-transform: capitalize;
+}
+
+.subheading {
+  margin: 0;
+  opacity: 0.6;
+  font-size: 0.95rem;
+}
+
+.searchRoot {
+  margin-bottom: 2rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  font-size: 1.05rem;
+  font: inherit;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  color: inherit;
+}
+
+.input:focus {
+  outline: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+  outline-offset: 1px;
+}
+
+/* InstantSearch renders submit and reset buttons; the demo does not need them. */
+.hiddenButton {
+  display: none;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.sidebar {
+  position: sticky;
+  top: 2rem;
+}
+
+.facetHeading {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  margin: 0 0 0.75rem;
+}
+
+.facetList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.facetLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.facetCount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.facetSearch {
+  margin-bottom: 0.75rem;
+}
+
+/* The facet's own search box renders submit and reset buttons of its own; the
+   input alone is enough here. */
+.facetSearch button {
+  display: none;
+}
+
+.facetSearch input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  background: transparent;
+  color: inherit;
+}
+
+.stats {
+  font-size: 0.8rem;
+  opacity: 0.55;
+  margin-bottom: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hitList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hit {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  align-items: center;
+}
+
+.hit:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.cover {
+  width: 3rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+  line-height: 1.3;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.rating {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}

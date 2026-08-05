@@ -11,6 +11,7 @@ export default {
   scaffold:
     'npm create astro@latest {{dir}} -- --template minimal --install --no-git --skip-houston',
   deps: ['typesense', 'typesense-instantsearch-adapter', 'instantsearch.js'],
+  devDeps: ['tsx'],
   env: {
     file: '.env',
     publicPrefix: 'PUBLIC_',

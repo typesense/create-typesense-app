@@ -1,16 +1,21 @@
 #!/usr/bin/env node
+import path from 'node:path'
 import { intro, log, note, outro, spinner } from '@clack/prompts'
 import pc from 'picocolors'
 import { USAGE, isInteractive, parseCliArgs, type CliArgs } from './cli.js'
 import { DEMO_QUERY_BY } from './constants.js'
 import type { ProjectConfig } from './config.js'
-import { readPackageVersion } from './paths.js'
+import { readPackageVersion, templatesDir } from './paths.js'
 import { resolveDefaults, runPrompts } from './prompts.js'
+import { addPackageScripts, installDependencies, projectScripts } from './steps/deps.js'
+import { applyOverlay } from './steps/overlay.js'
 import { provisionServer } from './steps/provision.js'
+import { ensureScaffold } from './steps/scaffold.js'
 import { setUpSearch } from './steps/searchSetup.js'
 import { assertAdminKeyNeverPublic, nextStepsLines, summaryLines } from './summary.js'
 import { loadTemplates } from './templates.js'
 import { checkDocker } from './util/docker.js'
+import { clearRunState, markRunStarted } from './util/state.js'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -71,6 +76,36 @@ async function main(): Promise<number> {
 
   note(summaryLines(config).join('\n'), 'Plan')
 
+  // Scaffolding has to come first: create-next-app refuses to run in a directory
+  // that already holds files, so writing anything before it is a hard error.
+  const build = spinner()
+  build.start('Scaffolding the project')
+  try {
+    await ensureScaffold(config, { onStep: (step) => build.message(step) })
+
+    // Only now can the run be marked resumable — before this the directory had to
+    // be empty for the framework CLI's sake.
+    await markRunStarted(config.targetDir, { version: 1, template: config.template.id })
+
+    const written = await applyOverlay(
+      path.join(templatesDir, config.template.id, config.template.files),
+      config.targetDir,
+    )
+    build.message(`Wrote ${written.length} template files`)
+
+    await installDependencies(config.targetDir, config.template.deps, config.template.devDeps, {
+      onStep: (step) => build.message(step),
+    })
+
+    await addPackageScripts(config.targetDir, projectScripts())
+    build.message('Added the seed and typesense scripts')
+  } catch (error) {
+    build.error('Could not set up the project')
+    log.error(messageOf(error))
+    return 1
+  }
+  build.stop(`Scaffolded ${config.template.name}`)
+
   const progress = spinner()
   progress.start('Starting Typesense')
   let provisioned
@@ -114,25 +149,13 @@ async function main(): Promise<number> {
     )
   }
 
-  // The command a user would run by hand to convince themselves. It uses the
-  // browser-visible key deliberately: that is the whole point of the key split.
-  note(
-    [
-      pc.dim('# search with the browser-safe key — no admin key anywhere:'),
-      `curl '${provisioned.baseUrl}/collections/${search.collection}/documents/search?q=hary+potr&query_by=${DEMO_QUERY_BY}' \\`,
-      `  -H 'X-TYPESENSE-API-KEY: ${search.searchOnlyKey}'`,
-      '',
-      `cd ${config.projectName} && docker compose down --volumes`,
-      pc.dim('# tears down the container and its data volume'),
-    ].join('\n'),
-    'Try it',
-  )
+  // The run completed, so the resume marker goes away: a finished project should
+  // be refused next time, not silently scaffolded over.
+  await clearRunState(config.targetDir)
 
-  log.warn(
-    `${pc.bold('M2 — searchable, but there is no app yet.')} ` +
-      'The search UI arrives with the template step.',
-  )
-  outro('Search ready.')
+  note(nextStepsLines(config).join('\n'), 'Next')
+
+  outro(`Done in ${config.projectName}. Type a misspelling and watch.`)
   return 0
 }
 
