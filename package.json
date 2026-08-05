@@ -4,9 +4,9 @@
   "description": "Scaffold a working Typesense search-as-you-type app in one command — server, schema, sample data, and a browser-safe search-only API key.",
   "type": "module",
   "license": "MIT",
-  "author": "Nikhiladiga <nikhiladigaz@gmail.com>",
+  "author": "Nikhil Adiga <nikhiladigaz@gmail.com>",
   "bin": {
-    "create-typesense-app": "./dist/index.js"
+    "create-typesense-app": "dist/index.js"
   },
   "files": [
     "dist",
