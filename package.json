@@ -1,9 +1,10 @@
 {
   "name": "create-typesense-app",
-  "version": "0.0.0",
-  "description": "Scaffold a working Typesense search-as-you-type app in one command.",
+  "version": "0.1.0",
+  "description": "Scaffold a working Typesense search-as-you-type app in one command — server, schema, sample data, and a browser-safe search-only API key.",
   "type": "module",
   "license": "MIT",
+  "author": "Nikhiladiga <nikhiladigaz@gmail.com>",
   "bin": {
     "create-typesense-app": "./dist/index.js"
   },
@@ -13,14 +14,19 @@
     "data"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "keywords": [
     "typesense",
     "search",
     "instantsearch",
+    "typo-tolerance",
+    "full-text-search",
     "scaffold",
-    "create-app"
+    "create-app",
+    "starter",
+    "nextjs",
+    "cli"
   ],
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
@@ -28,7 +34,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
