@@ -19,9 +19,9 @@ describe('parseCliArgs', () => {
   })
 
   it('reads a positional directory and short flags', () => {
-    expect(parseCliArgs(['my-app', '-t', 'astro', '-y'])).toMatchObject({
+    expect(parseCliArgs(['my-app', '-t', 'nextjs', '-y'])).toMatchObject({
       projectName: 'my-app',
-      templateId: 'astro',
+      templateId: 'nextjs',
       yes: true,
     })
   })
@@ -34,8 +34,8 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--port', value])).toThrow(/--port must be an integer/)
   })
 
-  it('rejects an unknown template before any prompting happens', () => {
-    expect(() => parseCliArgs(['-t', 'svelte'])).toThrow(/Unknown template "svelte"/)
+  it.each(['svelte', 'astro'])('rejects unknown template %s before any prompting', (id) => {
+    expect(() => parseCliArgs(['-t', id])).toThrow(new RegExp(`Unknown template "${id}"`))
   })
 
   it('rejects an unknown flag', () => {

@@ -37,9 +37,9 @@ describe('resolveDefaults', () => {
   })
 
   it('honours a positional name and an explicit template', async () => {
-    const config = resolveDefaults(await options({ projectName: 'demo', templateId: 'astro' }))
+    const config = resolveDefaults(await options({ projectName: 'demo', templateId: 'nextjs' }))
     expect(config.projectName).toBe('demo')
-    expect(config.template.id).toBe('astro')
+    expect(config.template.id).toBe('nextjs')
     expect(config.targetDir.endsWith(path.join(path.sep, 'demo'))).toBe(true)
   })
 
@@ -72,9 +72,21 @@ describe('summaryLines', () => {
     expect(lines).not.toContain(`NEXT_PUBLIC_${ADMIN_KEY_VAR}`)
   })
 
-  it('uses the Astro env conventions when Astro is chosen', async () => {
-    const config = resolveDefaults(await options({ templateId: 'astro' }))
-    const lines = summaryLines(config).join('\n')
+  /**
+   * Proves the summary reads the manifest instead of assuming Next.js conventions.
+   * Uses a synthetic manifest rather than a second bundled template: the point is
+   * that nothing here is hardcoded, and that must hold for whatever comes next.
+   */
+  it('follows whatever prefix and env file the manifest declares', async () => {
+    const config = resolveDefaults(await options())
+    const pretend = {
+      ...config,
+      template: {
+        ...config.template,
+        env: { file: '.env', publicPrefix: 'PUBLIC_' },
+      },
+    }
+    const lines = summaryLines(pretend).join('\n')
     expect(lines).toContain(`PUBLIC_${SEARCH_KEY_VAR}`)
     expect(lines).toContain('.env')
     expect(lines).not.toContain('NEXT_PUBLIC_')
@@ -85,9 +97,5 @@ describe('summaryLines', () => {
     expect(nextjs).toContain('http://localhost:3000')
     expect(nextjs).toContain('hary potr')
 
-    const astro = nextStepsLines(
-      resolveDefaults(await options({ templateId: 'astro' })),
-    ).join('\n')
-    expect(astro).toContain('http://localhost:4321')
   })
 })

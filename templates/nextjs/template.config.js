@@ -14,8 +14,8 @@ export default {
   env: {
     file: '.env.local',
     publicPrefix: 'NEXT_PUBLIC_',
-    accessor: 'process.env',
   },
+  seedCommand: 'tsx scripts/seed.ts',
   files: 'files/',
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:3000',

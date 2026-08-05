@@ -11,7 +11,7 @@ import {
 import { COMPOSE_FILE } from './steps/compose.js'
 import { hasRunState } from './util/state.js'
 import type { Dataset, ProjectConfig, ServerConfig } from './config.js'
-import type { TemplateManifest } from './templates.js'
+import { resolveTemplateWithoutPrompting, type TemplateManifest } from './templates.js'
 import type { DockerStatus } from './util/docker.js'
 
 export interface PromptOptions {
@@ -119,17 +119,8 @@ async function askProjectName(options: PromptOptions): Promise<string> {
 }
 
 async function askTemplate(options: PromptOptions): Promise<TemplateManifest> {
-  if (options.templateId !== undefined) {
-    const match = options.templates.find((template) => template.id === options.templateId)
-    if (!match) {
-      throw new Error(
-        `Unknown template "${options.templateId}". Available: ${options.templates
-          .map((template) => template.id)
-          .join(', ')}`,
-      )
-    }
-    return match
-  }
+  const settled = resolveTemplateWithoutPrompting(options.templates, options.templateId)
+  if (settled !== undefined) return settled
 
   const id = unwrap(
     await select({
@@ -245,7 +236,7 @@ export async function runPrompts(options: PromptOptions): Promise<ProjectConfig>
   }
 }
 
-/** Non-interactive resolution for `--yes` (PLAN.md §7): Next.js, Docker, books. */
+/** Non-interactive resolution for `--yes`: first template, local Docker, books. */
 export function resolveDefaults(options: PromptOptions): ProjectConfig {
   const projectName = options.projectName ?? DEFAULT_PROJECT_NAME
 
@@ -256,15 +247,10 @@ export function resolveDefaults(options: PromptOptions): ProjectConfig {
   const dirError = validateTargetDir(targetDir)
   if (dirError) throw new Error(dirError)
 
-  const template = options.templates.find(
-    (candidate) => candidate.id === (options.templateId ?? options.templates[0]?.id),
-  )
-  if (!template) {
-    throw new Error(
-      `Unknown template "${options.templateId}". Available: ${options.templates
-        .map((candidate) => candidate.id)
-        .join(', ')}`,
-    )
+  const template =
+    resolveTemplateWithoutPrompting(options.templates, options.templateId) ?? options.templates[0]
+  if (template === undefined) {
+    throw new Error('No templates are bundled with this package.')
   }
 
   if (!options.docker.available) {

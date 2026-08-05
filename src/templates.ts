@@ -1,19 +1,51 @@
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { templatesDir } from './paths.js'
 
-/** Order matters: the first entry is the recommended default in the prompt. */
-export const TEMPLATE_IDS = ['nextjs', 'astro'] as const
-export type TemplateId = (typeof TEMPLATE_IDS)[number]
+/**
+ * The templates this CLI ships, read from the templates directory rather than
+ * written down here.
+ *
+ * Deliberate: no framework's name appears anywhere in src/, so adding or removing
+ * a template is a change to templates/ alone. Only one ships today — Next.js — on
+ * the grounds that a second framework doubles the surface to keep working against
+ * upstream churn, for a demo whose value is the search wiring rather than the
+ * framework. The manifest indirection stays because it keeps that surface
+ * declarative, which is what makes adding one back contained.
+ *
+ * Sorted, so the default (the first) does not depend on filesystem order.
+ */
+function discoverTemplateIds(): string[] {
+  let entries
+  try {
+    entries = readdirSync(templatesDir, { withFileTypes: true })
+  } catch (error) {
+    throw new Error(
+      `Could not read the bundled templates from ${templatesDir}. The installation looks incomplete.`,
+      { cause: error },
+    )
+  }
+
+  const ids = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+
+  if (ids.length === 0) {
+    throw new Error(`No templates found in ${templatesDir}. The installation looks incomplete.`)
+  }
+  return ids
+}
+
+export const TEMPLATE_IDS: readonly string[] = discoverTemplateIds()
+export type TemplateId = string
 
 export interface TemplateEnv {
   /** Env file the framework reads, relative to the project root. */
   file: string
   /** Prefix that makes a variable browser-visible, e.g. `NEXT_PUBLIC_`. */
   publicPrefix: string
-  /** How template code reads env vars, e.g. `process.env`. */
-  accessor: string
 }
 
 export interface TemplateManifest {
@@ -25,6 +57,11 @@ export interface TemplateManifest {
   /** Installed with --save-dev. May be empty. */
   devDeps: string[]
   env: TemplateEnv
+  /**
+   * Command wired up as `npm run seed` in the generated project. Framework-specific
+   * because it names the TypeScript runner from devDeps.
+   */
+  seedCommand: string
   /** Overlay directory, relative to the template dir. */
   files: string
   devCommand: string
@@ -51,12 +88,13 @@ const MANIFEST_KEYS = [
   'deps',
   'devDeps',
   'env',
+  'seedCommand',
   'files',
   'devCommand',
   'devUrl',
 ] as const
 
-const ENV_KEYS = ['file', 'publicPrefix', 'accessor'] as const
+const ENV_KEYS = ['file', 'publicPrefix'] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -113,7 +151,6 @@ function validateEnv(raw: unknown, source: string): TemplateEnv {
 
   const file = requireRelativePath(requireString(raw, 'file', source), 'env.file', source)
   const publicPrefix = requireString(raw, 'publicPrefix', source)
-  const accessor = requireString(raw, 'accessor', source)
 
   // A prefix missing its trailing underscore produces `PUBLIC_TYPESENSEHOST`
   // style names that the framework silently fails to expose.
@@ -130,7 +167,7 @@ function validateEnv(raw: unknown, source: string): TemplateEnv {
     )
   }
 
-  return { file, publicPrefix, accessor }
+  return { file, publicPrefix }
 }
 
 function validateDeps(raw: unknown, source: string): string[] {
@@ -199,6 +236,7 @@ export function validateManifest(raw: unknown, source: string): TemplateManifest
     deps: validateDeps(raw['deps'], source),
     devDeps: validateDevDeps(raw['devDeps'], source),
     env: validateEnv(raw['env'], source),
+    seedCommand: requireString(raw, 'seedCommand', source),
     files: requireRelativePath(requireString(raw, 'files', source), 'files', source),
     devCommand: requireString(raw, 'devCommand', source),
     devUrl,
@@ -237,4 +275,30 @@ export async function loadTemplate(id: string): Promise<TemplateManifest> {
 
 export async function loadTemplates(): Promise<TemplateManifest[]> {
   return Promise.all(TEMPLATE_IDS.map((id) => loadTemplate(id)))
+}
+
+/**
+ * The chosen template, when it can be settled without asking.
+ *
+ * With a single bundled template there is nothing to choose, and a one-option
+ * prompt is just a keystroke tax. Returns undefined only when a genuine choice
+ * exists, which is the caller's cue to prompt.
+ */
+export function resolveTemplateWithoutPrompting(
+  templates: TemplateManifest[],
+  templateId?: string,
+): TemplateManifest | undefined {
+  if (templateId !== undefined) {
+    const match = templates.find((template) => template.id === templateId)
+    if (!match) {
+      throw new Error(
+        `Unknown template "${templateId}". Available: ${templates
+          .map((template) => template.id)
+          .join(', ')}`,
+      )
+    }
+    return match
+  }
+
+  return templates.length === 1 ? templates[0] : undefined
 }

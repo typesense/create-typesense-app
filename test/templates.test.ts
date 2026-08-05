@@ -4,6 +4,7 @@ import {
   TemplateManifestError,
   loadTemplate,
   loadTemplates,
+  resolveTemplateWithoutPrompting,
   validateManifest,
 } from '../src/templates.js'
 
@@ -14,7 +15,8 @@ function validManifest(): Record<string, unknown> {
     name: 'Next.js + react-instantsearch',
     scaffold: 'npx --yes create-next-app@latest {{dir}} --ts --yes',
     deps: ['typesense', 'typesense-instantsearch-adapter'],
-    env: { file: '.env.local', publicPrefix: 'NEXT_PUBLIC_', accessor: 'process.env' },
+    env: { file: '.env.local', publicPrefix: 'NEXT_PUBLIC_' },
+    seedCommand: 'tsx scripts/seed.ts',
     files: 'files/',
     devCommand: 'npm run dev',
     devUrl: 'http://localhost:3000',
@@ -140,9 +142,9 @@ describe('validateManifest', () => {
 })
 
 describe('bundled templates', () => {
-  it('ships exactly the two templates the spec allows', async () => {
+  it('ships exactly one template, by design', async () => {
     const templates = await loadTemplates()
-    expect(templates.map((template) => template.id)).toEqual(['nextjs', 'astro'])
+    expect(templates.map((template) => template.id)).toEqual(['nextjs'])
   })
 
   it.each(TEMPLATE_IDS)('%s satisfies the contract', async (id) => {
@@ -152,14 +154,73 @@ describe('bundled templates', () => {
     expect(manifest.deps).toContain('typesense-instantsearch-adapter')
   })
 
-  it('gives the two templates distinct env conventions', async () => {
-    const [nextjs, astro] = await loadTemplates()
-    expect(nextjs?.env.publicPrefix).not.toBe(astro?.env.publicPrefix)
-    expect(nextjs?.env.accessor).not.toBe(astro?.env.accessor)
-    expect(nextjs?.env.file).not.toBe(astro?.env.file)
+  it("declares Next.js's own env conventions rather than assuming defaults", async () => {
+    const [nextjs] = await loadTemplates()
+    expect(nextjs?.env.publicPrefix).toBe('NEXT_PUBLIC_')
+    expect(nextjs?.env.file).toBe('.env.local')
   })
 
   it('reports a helpful error for an unknown template id', async () => {
     await expect(loadTemplate('svelte')).rejects.toThrow(/file not found/)
+  })
+})
+
+describe('resolveTemplateWithoutPrompting', () => {
+  it('settles on the only template there is, so no pointless one-option prompt', async () => {
+    const templates = await loadTemplates()
+    expect(templates).toHaveLength(1)
+    expect(resolveTemplateWithoutPrompting(templates)?.id).toBe('nextjs')
+  })
+
+  it('honours an explicit id', async () => {
+    const templates = await loadTemplates()
+    expect(resolveTemplateWithoutPrompting(templates, 'nextjs')?.id).toBe('nextjs')
+  })
+
+  it('rejects an id that is not on offer', async () => {
+    const templates = await loadTemplates()
+    expect(() => resolveTemplateWithoutPrompting(templates, 'astro')).toThrow(/Unknown template/)
+  })
+
+  /** Guards the day a second template returns: the prompt must come back with it. */
+  it('defers to a prompt when there is more than one to choose from', async () => {
+    const [nextjs] = await loadTemplates()
+    const pretendSecond = { ...nextjs!, id: 'other', name: 'Other' }
+    expect(resolveTemplateWithoutPrompting([nextjs!, pretendSecond])).toBeUndefined()
+  })
+})
+
+describe('the contract carries everything framework-specific', () => {
+  it('declares the command that runs the seed script', async () => {
+    const [nextjs] = await loadTemplates()
+    expect(nextjs?.seedCommand).toBe('tsx scripts/seed.ts')
+  })
+
+  it('requires a seedCommand', () => {
+    expectRejected((manifest) => delete manifest['seedCommand'], /"seedCommand" must be/)
+  })
+
+  /**
+   * accessor was in the contract but nothing ever read it: the overlay files are
+   * static and reference process.env directly, so there is nothing to interpolate.
+   * Rejecting it keeps the contract to fields that actually do something.
+   */
+  it('rejects the retired accessor field rather than silently ignoring it', () => {
+    expectRejected(
+      (manifest) => {
+        manifest['env'] = { ...(manifest['env'] as object), accessor: 'process.env' }
+      },
+      /unknown env key: accessor/,
+    )
+  })
+
+  it('discovers its templates from the directory, not a hardcoded list', async () => {
+    const { readdirSync } = await import('node:fs')
+    const { templatesDir } = await import('../src/paths.js')
+    const onDisk = readdirSync(templatesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+    expect([...TEMPLATE_IDS].sort()).toEqual(onDisk)
   })
 })

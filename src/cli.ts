@@ -25,7 +25,7 @@ ${pc.bold('Usage')}
   npx create-typesense-app@latest [directory] [options]
 
 ${pc.bold('Options')}
-  -t, --template <id>   ${TEMPLATE_IDS.join(' | ')}
+  -t, --template <id>   ${TEMPLATE_IDS.join(' | ')} (only one is bundled)
       --dataset <name>  books (default) | empty — skips the sample data download
       --port <number>   host port for the local Docker server (default ${DEFAULT_PORT})
   -y, --yes             accept defaults: ${TEMPLATE_IDS[0]}, local Docker, books dataset
@@ -35,7 +35,7 @@ ${pc.bold('Options')}
 ${pc.bold('Examples')}
   npx create-typesense-app@latest
   npx create-typesense-app@latest my-search-app --yes
-  npx create-typesense-app@latest my-search-app -t ${TEMPLATE_IDS[1]}
+  npx create-typesense-app@latest my-search-app --dataset empty
 `.trimStart()
 
 export interface CliArgs {

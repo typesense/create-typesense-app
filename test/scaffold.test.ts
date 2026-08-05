@@ -33,10 +33,10 @@ describe('tokenizeCommand', () => {
   })
 
   it('keeps a double-quoted argument together', () => {
-    expect(tokenizeCommand('npm create astro -- --template "my template"')).toEqual([
+    expect(tokenizeCommand('npm create vite -- --template "my template"')).toEqual([
       'npm',
       'create',
-      'astro',
+      'vite',
       '--',
       '--template',
       'my template',
@@ -286,8 +286,10 @@ describe('validateTargetDir with a resume marker', () => {
   })
 })
 
+const nextjsTemplate = await loadTemplate('nextjs')
+
 describe('projectScripts', () => {
-  const scripts = projectScripts()
+  const scripts = projectScripts(nextjsTemplate)
 
   it('adds exactly the three scripts the plan calls for', () => {
     expect(Object.keys(scripts).sort()).toEqual(['seed', 'typesense:down', 'typesense:up'])
@@ -313,9 +315,13 @@ describe('projectScripts', () => {
     }
   })
 
-  it('runs the seed script through the declared dev dependency', async () => {
-    const template = await loadTemplate('nextjs')
-    expect(scripts['seed']).toBe('tsx scripts/seed.ts')
-    expect(template.devDeps).toContain('tsx')
+  it('takes the seed command from the manifest, not from src/', () => {
+    expect(scripts['seed']).toBe(nextjsTemplate.seedCommand)
+    expect(nextjsTemplate.devDeps).toContain('tsx')
+  })
+
+  it('uses whatever runner a manifest declares', () => {
+    const pretend = { ...nextjsTemplate, seedCommand: 'node --run seed' }
+    expect(projectScripts(pretend)['seed']).toBe('node --run seed')
   })
 })

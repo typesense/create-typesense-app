@@ -59,6 +59,30 @@ export async function waitForHealth(
   )
 }
 
+/**
+ * Turns docker's port-clash wording into something actionable.
+ *
+ * The raw message ("driver failed programming external connectivity on endpoint
+ * ... Bind for 0.0.0.0:8108 failed") buries the one useful fact. Anyone who
+ * already runs Typesense on the default port hits this on their first run, so it
+ * is worth naming the cause and both ways out. The original output is kept for
+ * diagnosis.
+ */
+export function describeStartFailure(stderr: string, port: number): string {
+  const clash =
+    /port is already allocated|address already in use|ports are not available/i.test(stderr)
+  if (!clash) return stderr
+
+  return (
+    `Port ${port} is already in use, so Typesense could not start.\n` +
+    `  Something is bound to it — most likely a Typesense you already have running.\n` +
+    `  Either use another port:   --port ${port + 1}\n` +
+    "  or point at the existing server instead of starting one (drop --yes and pick\n" +
+    '  "I already have one running").\n\n' +
+    `Docker said:\n${stderr}`
+  )
+}
+
 export async function composeUp(dir: string): Promise<void> {
   await runCompose(dir, ['up', '--detach'])
 }

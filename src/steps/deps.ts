@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { execa } from 'execa'
+import type { TemplateManifest } from '../templates.js'
 
 export interface InstallOptions {
   onStep?: (message: string) => void
@@ -69,16 +70,17 @@ export async function addPackageScripts(
 /**
  * Scripts added alongside the framework's own (PLAN.md §6).
  *
- * Framework-agnostic: none of them needs a flag, because the generated compose
- * file uses no variable substitution.
+ * The two docker commands are framework-agnostic and need no flags, because the
+ * generated compose file uses no variable substitution. Only the seed runner is
+ * framework-specific, and it comes from the manifest.
  *
  * `typesense:down` deliberately omits `--volumes`. It is the everyday "stop for
  * now" command, and wiping the index on every stop would bring the app back empty
  * until it was reseeded. A deliberate wipe is `docker compose down --volumes`.
  */
-export function projectScripts(): Record<string, string> {
+export function projectScripts(template: TemplateManifest): Record<string, string> {
   return {
-    seed: 'tsx scripts/seed.ts',
+    seed: template.seedCommand,
     'typesense:up': 'docker compose up --detach',
     'typesense:down': 'docker compose down',
   }

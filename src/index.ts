@@ -97,7 +97,7 @@ async function main(): Promise<number> {
       onStep: (step) => build.message(step),
     })
 
-    await addPackageScripts(config.targetDir, projectScripts())
+    await addPackageScripts(config.targetDir, projectScripts(config.template))
     build.message('Added the seed and typesense scripts')
   } catch (error) {
     build.error('Could not set up the project')

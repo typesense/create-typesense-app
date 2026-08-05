@@ -3,7 +3,12 @@ import { ADMIN_KEY_VAR } from '../constants.js'
 import type { ProjectConfig, ServerConfig } from '../config.js'
 import { writeComposeFile } from './compose.js'
 import { readEnvFile, writeEnvFile } from './env.js'
-import { composeUp, waitForHealth, type WaitForHealthOptions } from './server.js'
+import {
+  composeUp,
+  describeStartFailure,
+  waitForHealth,
+  type WaitForHealthOptions,
+} from './server.js'
 import { generateAdminKey } from '../util/apiKey.js'
 import { composePull, missingImages } from '../util/docker.js'
 import { createPullTracker } from '../util/pullProgress.js'
@@ -94,7 +99,14 @@ export async function provisionServer(
       })
     }
 
-    await composeUp(targetDir)
+    try {
+      await composeUp(targetDir)
+    } catch (error) {
+      throw new Error(
+        describeStartFailure(error instanceof Error ? error.message : String(error), server.port),
+        { cause: error },
+      )
+    }
     onStep(`Started Typesense on :${server.port}`)
   }
 
