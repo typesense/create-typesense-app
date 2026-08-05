@@ -1,6 +1,6 @@
 {
   "name": "create-typesense-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scaffold a working Typesense search-as-you-type app in one command — server, schema, sample data, and a browser-safe search-only API key.",
   "type": "module",
   "license": "MIT",
