@@ -12,6 +12,8 @@ You get a Next.js app, Typesense running in Docker with CORS set up, roughly
 10,000 books indexed, and a search-only API key scoped to one collection. The
 admin key stays out of the browser.
 
+![Output](docs/output.png)
+
 ```
 ◇  Scaffolded Next.js + react-instantsearch
 ◇  Typesense is healthy at http://127.0.0.1:8108
