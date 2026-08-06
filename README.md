@@ -70,7 +70,3 @@ Type `hary potr`. It finds Harry Potter.
 
 A template is a manifest plus a file overlay. See
 [templates/README.md](templates/README.md).
-
----
-
-Independent community project. Not affiliated with Typesense, Inc.
