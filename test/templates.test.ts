@@ -144,7 +144,7 @@ describe('validateManifest', () => {
 describe('bundled templates', () => {
   it('ships the templates in the directory, nextjs first as the default', async () => {
     const templates = await loadTemplates()
-    expect(templates.map((template) => template.id)).toEqual(['nextjs', 'solid', 'vanilla'])
+    expect(templates.map((template) => template.id)).toEqual(['nextjs', 'qwik', 'solid', 'vanilla'])
   })
 
   it('gives each template its own env conventions rather than assuming one', async () => {
@@ -152,12 +152,13 @@ describe('bundled templates', () => {
     expect(byId['nextjs']?.env.publicPrefix).toBe('NEXT_PUBLIC_')
     expect(byId['vanilla']?.env.publicPrefix).toBe('VITE_')
     expect(byId['solid']?.env.publicPrefix).toBe('VITE_')
+    expect(byId['qwik']?.env.publicPrefix).toBe('VITE_')
     expect(byId['nextjs']?.env.file).not.toBe(byId['solid']?.env.file)
     expect(byId['nextjs']?.seedCommand).not.toBe(byId['solid']?.seedCommand)
   })
 
   /** Every template must reach the same aha moment, whatever its stack. */
-  it.each(['nextjs', 'solid', 'vanilla'])('%s wires up the search dependencies', async (id) => {
+  it.each(['nextjs', 'qwik', 'solid', 'vanilla'])('%s wires up the search dependencies', async (id) => {
     const template = await loadTemplate(id)
     expect(template.deps).toContain('typesense-instantsearch-adapter')
     expect(template.devUrl).toMatch(/^http:\/\/localhost:\d+$/)

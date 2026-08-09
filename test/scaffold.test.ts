@@ -4,7 +4,12 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildScaffoldCommand, scaffoldInvocation, tokenizeCommand } from '../src/steps/scaffold.js'
 import { applyOverlay, removeSuperseded } from '../src/steps/overlay.js'
-import { addPackageScripts, mergeScripts, projectScripts } from '../src/steps/deps.js'
+import {
+  addPackageScripts,
+  installPlan,
+  mergeScripts,
+  projectScripts,
+} from '../src/steps/deps.js'
 import {
   clearRunState,
   hasRunState,
@@ -385,5 +390,39 @@ describe('scaffoldInvocation', () => {
   it('keeps a name containing spaces as a single argument', () => {
     const { args } = scaffoldInvocation(nextjsTemplate, '/tmp/some dir/my app')
     expect(args).toContain('my app')
+  })
+})
+
+describe('installPlan', () => {
+  /**
+   * Order matters, and not academically. create-vite's qwik starter pins
+   * vite@^8 while @builder.io/qwik declares `peer vite@">=5 <8"`, so a plain
+   * `npm install` in a freshly scaffolded project fails with ERESOLVE before we
+   * add anything. The template corrects the pin through devDeps, which only
+   * helps if devDeps are installed first.
+   */
+  it('installs devDeps before deps, so a corrected pin lands first', () => {
+    const plan = installPlan(['typesense'], ['vite@^7'])
+    expect(plan.map((step) => step.args)).toEqual([
+      ['install', '--save-dev', 'vite@^7'],
+      ['install', 'typesense'],
+    ])
+  })
+
+  it('skips the devDeps step when a template needs none', () => {
+    expect(installPlan(['typesense'], [])).toHaveLength(1)
+    expect(installPlan(['typesense'], [])[0]?.args).toEqual(['install', 'typesense'])
+  })
+
+  it('describes each step for the progress spinner', () => {
+    const plan = installPlan(['typesense', 'instantsearch.js'], ['tsx'])
+    expect(plan.map((step) => step.description)).toEqual([
+      'Installing tsx',
+      'Installing typesense, instantsearch.js',
+    ])
+  })
+
+  it('plans nothing when there is nothing to install', () => {
+    expect(installPlan([], [])).toEqual([])
   })
 })

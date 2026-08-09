@@ -1,0 +1,21 @@
+/*
+ * Deliberately minimal, and it replaces the starter's version on purpose.
+ *
+ * The Qwik starter styles #app as a fixed-width centred flex column. Our page
+ * would become a flex item inside it, inheriting centred text and a width it does
+ * not control — the layout would then resize as results change. Setting the page
+ * width in app.css only works if nothing above it fights for the same job.
+ */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}

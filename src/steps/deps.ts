@@ -7,12 +7,40 @@ export interface InstallOptions {
   onStep?: (message: string) => void
 }
 
+export interface InstallStep {
+  args: string[]
+  description: string
+}
+
+/**
+ * The npm invocations an install needs, in order.
+ *
+ * devDeps go first, which is not arbitrary. A starter can pin a version its own
+ * framework does not support — create-vite's qwik template pins vite@^8 while
+ * @builder.io/qwik declares `peer vite@">=5 <8"`, so even a plain `npm install`
+ * on the untouched scaffold fails. A template corrects that through devDeps, and
+ * the correction only helps if it lands before anything else is resolved.
+ */
+export function installPlan(deps: string[], devDeps: string[]): InstallStep[] {
+  const steps: InstallStep[] = []
+  if (devDeps.length > 0) {
+    steps.push({
+      args: ['install', '--save-dev', ...devDeps],
+      description: `Installing ${devDeps.join(', ')}`,
+    })
+  }
+  if (deps.length > 0) {
+    steps.push({ args: ['install', ...deps], description: `Installing ${deps.join(', ')}` })
+  }
+  return steps
+}
+
 /**
  * Installs the template's dependencies.
  *
- * The scaffold step runs the framework CLI with install skipped, so this single
- * pass installs the framework's own dependencies and the template's together
- * instead of paying for two full installs.
+ * The scaffold step runs the framework CLI with install skipped, so these passes
+ * install the framework's own dependencies and the template's together instead of
+ * paying for a separate full install.
  */
 export async function installDependencies(
   targetDir: string,
@@ -36,10 +64,8 @@ export async function installDependencies(
     }
   }
 
-  await npm(['install', ...deps], `Installing ${deps.join(', ')}`)
-
-  if (devDeps.length > 0) {
-    await npm(['install', '--save-dev', ...devDeps], `Installing ${devDeps.join(', ')}`)
+  for (const step of installPlan(deps, devDeps)) {
+    await npm(step.args, step.description)
   }
 }
 
