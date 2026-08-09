@@ -34,7 +34,7 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--port', value])).toThrow(/--port must be an integer/)
   })
 
-  it.each(['nextjs', 'vanilla'])('accepts the bundled template %s', (id) => {
+  it.each(['nextjs', 'solid', 'vanilla'])('accepts the bundled template %s', (id) => {
     expect(parseCliArgs(['-t', id]).templateId).toBe(id)
   })
 
