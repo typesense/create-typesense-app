@@ -101,12 +101,15 @@
   opacity: 0.5;
 }
 
+/*
+ * Styled directly, not as `.facet-search input`. The widget-based templates put
+ * this class on the wrapper InstantSearch renders around the input; here the
+ * markup is ours and the class is on the input itself, so a descendant selector
+ * matches nothing and the field falls back to the browser's default chrome.
+ */
 .facet-search {
-  margin-bottom: 0.75rem;
-}
-
-.facet-search input {
   width: 100%;
+  margin-bottom: 0.75rem;
   font: inherit;
   font-size: 0.85rem;
   padding: 0.4rem 0.55rem;
@@ -116,9 +119,9 @@
   color: inherit;
 }
 
-/* The facet's own search box renders submit and reset buttons; the input is enough. */
-.facet-search button {
-  display: none;
+.facet-search:focus {
+  outline: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  outline-offset: 1px;
 }
 
 .stats {
