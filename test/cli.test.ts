@@ -34,6 +34,10 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(['--port', value])).toThrow(/--port must be an integer/)
   })
 
+  it.each(['nextjs', 'vanilla'])('accepts the bundled template %s', (id) => {
+    expect(parseCliArgs(['-t', id]).templateId).toBe(id)
+  })
+
   it.each(['svelte', 'astro'])('rejects unknown template %s before any prompting', (id) => {
     expect(() => parseCliArgs(['-t', id])).toThrow(new RegExp(`Unknown template "${id}"`))
   })

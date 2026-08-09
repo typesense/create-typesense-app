@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { execa } from 'execa'
 import type { ProjectConfig } from '../config.js'
+import type { TemplateManifest } from '../templates.js'
 
 export interface ScaffoldOutcome {
   /** False when a project was already there and scaffolding was skipped. */
@@ -69,6 +70,23 @@ export function buildScaffoldCommand(
 }
 
 /**
+ * Where and how to run a template's scaffold command.
+ *
+ * The directory is passed as a bare name with the parent as cwd, never as an
+ * absolute path. create-next-app accepts either, but create-vite treats its
+ * argument as relative even when it is absolute: given /tmp/x/my-app it builds
+ * tmp/x/my-app *inside* the current directory and leaves the real target empty,
+ * exiting 0 either way.
+ */
+export function scaffoldInvocation(
+  template: TemplateManifest,
+  targetDir: string,
+): { command: string; args: string[]; cwd: string } {
+  const { command, args } = buildScaffoldCommand(template.scaffold, path.basename(targetDir))
+  return { command, args, cwd: path.dirname(targetDir) }
+}
+
+/**
  * Runs the framework's own CLI, unless a project is already there.
  *
  * The skip matters twice over: it makes a re-run after a failure work, and
@@ -84,15 +102,11 @@ export async function ensureScaffold(
     return { scaffolded: false }
   }
 
-  const { command, args } = buildScaffoldCommand(config.template.scaffold, config.targetDir)
+  const { command, args, cwd } = scaffoldInvocation(config.template, config.targetDir)
   onStep(`Scaffolding ${config.template.name}`)
 
   try {
-    await execa(command, args, {
-      cwd: path.dirname(config.targetDir),
-      timeout: 600_000,
-      stdin: 'ignore',
-    })
+    await execa(command, args, { cwd, timeout: 600_000, stdin: 'ignore' })
   } catch (error) {
     const stderr =
       typeof error === 'object' && error !== null && 'stderr' in error

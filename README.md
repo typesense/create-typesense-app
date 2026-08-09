@@ -41,7 +41,7 @@ Type `hary potr`. It finds Harry Potter.
 ## Options
 
 ```
--t, --template <id>   nextjs (only one is bundled)
+-t, --template <id>   nextjs | vanilla
     --dataset <name>  books (default) | empty
     --port <number>   host port for the local server (default 8108)
 -y, --yes             take the defaults, no prompts
@@ -49,12 +49,23 @@ Type `hary potr`. It finds Harry Potter.
 -v, --version         print the version
 ```
 
+## Templates
+
+| id | Stack |
+|---|---|
+| `nextjs` | Next.js + `react-instantsearch` |
+| `vanilla` | Vanilla JS + `instantsearch.js`, bundled by Vite |
+
+Both give you the same app. A template is a manifest plus a file overlay, so
+adding one touches nothing else. See
+[templates/README.md](templates/README.md).
+
 ## What you get
 
-- Next.js + `react-instantsearch`, wired to a search box, hits and one facet
+- A search box, hits with covers, and one facet
 - Typesense in Docker, CORS already configured
 - ~10,000 books indexed
-- `scripts/schema.ts` and `scripts/seed.ts`, short and commented
+- A schema and a seed script, short and commented, in the template's language
 - A search-only API key in the browser, scoped to `documents:search` on one
   collection. The admin key stays server-side and never gets the public prefix.
 
@@ -65,8 +76,3 @@ Type `hary potr`. It finds Harry Potter.
 | `npm run seed` | rebuilds the collection, and restores the search key if it went missing |
 | `npm run typesense:up` | starts the server |
 | `npm run typesense:down` | stops it, keeping your data |
-
-## Templates
-
-A template is a manifest plus a file overlay. See
-[templates/README.md](templates/README.md).
