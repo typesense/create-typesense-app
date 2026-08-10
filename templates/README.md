@@ -12,6 +12,7 @@ to this directory alone.
 | Template | Stack | Env prefix |
 |---|---|---|
 | `nextjs` | Next.js + `react-instantsearch` | `NEXT_PUBLIC_` |
+| `qwik` | Qwik + `instantsearch.js`, bundled by Vite | `VITE_` |
 | `solid` | SolidJS + `instantsearch.js` connectors, bundled by Vite | `VITE_` |
 | `vanilla` | Vanilla JS + `instantsearch.js`, bundled by Vite | `VITE_` |
 
@@ -39,7 +40,7 @@ ignored — so adding a field means updating `MANIFEST_KEYS` there and this tabl
 | `name` | string | shown in the framework prompt, and in the CLI's summary |
 | `scaffold` | string | shell command that creates the base project. **Must** contain `{{dir}}` |
 | `deps` | string[] | runtime dependencies; installed with `npm install`. Non-empty |
-| `devDeps` | string[] | optional; installed with `--save-dev` |
+| `devDeps` | string[] | optional; installed with `--save-dev`, **before** `deps`, so a corrected version pin lands first |
 | `env.file` | string | the env file the framework reads, e.g. `.env.local`. Relative, no `..` |
 | `env.publicPrefix` | string | prefix that makes a variable browser-visible. SCREAMING_SNAKE_CASE, **must** end with `_` |
 | `seedCommand` | string | wired up as `npm run seed`; names the runner from `devDeps` |
@@ -112,10 +113,22 @@ Two things the UI must get right, or the demo quietly stops being impressive:
   the Solid starter pins `#root` to a fixed-width centred flex column. Either way
   the layout resizes on every keystroke. Set an explicit width, and replace the
   starter's stylesheet if it fights you.
-- **Where no framework binding exists, reach for the connectors.**
-  `instantsearch.js/es/connectors` gives you state and a `refine()` function
-  instead of a rendered widget, which drops straight into whatever reactivity the
-  framework has. The Solid template is the worked example.
+- **Where no framework binding exists, pick one of two shapes.** Use
+  `instantsearch.js/es/connectors` when the framework's state can hold anything:
+  a connector hands back state and a `refine()` function instead of rendering, and
+  drops straight into a signal (the `solid` template). Use the widgets with DOM
+  refs when it cannot: Qwik serialises component state to resume, and
+  InstantSearch's state holds callbacks and class instances that will not
+  serialise, so the `qwik` template keeps the library inside `useVisibleTask$` and
+  lets it own the DOM.
+
+### When the starter itself is broken
+
+Scaffolds are not always internally consistent. create-vite's qwik template pins
+`vite@^8` while `@builder.io/qwik` declares `peer vite@">=5 <8"`, so even a plain
+`npm install` on the untouched scaffold fails with ERESOLVE. Correct it with a
+pinned entry in `devDeps` (`vite@^7`), which is installed first for exactly this
+reason. Always run a scaffold and install it before writing the overlay.
 
 ## Adding a template
 
