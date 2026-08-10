@@ -12,6 +12,7 @@ to this directory alone.
 | Template | Stack | Env prefix |
 |---|---|---|
 | `nextjs` | Next.js + `react-instantsearch` | `NEXT_PUBLIC_` |
+| `solid` | SolidJS + `instantsearch.js` connectors, bundled by Vite | `VITE_` |
 | `vanilla` | Vanilla JS + `instantsearch.js`, bundled by Vite | `VITE_` |
 
 ## Layout
@@ -105,10 +106,16 @@ Two things the UI must get right, or the demo quietly stops being impressive:
 
 - **Search `title` and `authors`, not just `title`.** A misspelled author name
   finds nothing otherwise.
-- **Do not let the page size itself from its own content.** Frameworks style
-  `body` in ways you do not control — Next.js sets `display: flex`, and auto
-  margins on a flex item suppress stretch, which makes the layout resize on every
-  keystroke. Set an explicit width. See the comments in `search.module.css`.
+- **Do not let the page size itself from its own content.** Starters style the
+  page or its mount point in ways you do not control. Next.js sets
+  `body { display: flex }`, where auto margins on a flex item suppress stretch;
+  the Solid starter pins `#root` to a fixed-width centred flex column. Either way
+  the layout resizes on every keystroke. Set an explicit width, and replace the
+  starter's stylesheet if it fights you.
+- **Where no framework binding exists, reach for the connectors.**
+  `instantsearch.js/es/connectors` gives you state and a `refine()` function
+  instead of a rendered widget, which drops straight into whatever reactivity the
+  framework has. The Solid template is the worked example.
 
 ## Adding a template
 

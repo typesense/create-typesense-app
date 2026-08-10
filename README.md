@@ -41,7 +41,7 @@ Type `hary potr`. It finds Harry Potter.
 ## Options
 
 ```
--t, --template <id>   nextjs | vanilla
+-t, --template <id>   nextjs | solid | vanilla
     --dataset <name>  books (default) | empty
     --port <number>   host port for the local server (default 8108)
 -y, --yes             take the defaults, no prompts
@@ -54,6 +54,7 @@ Type `hary potr`. It finds Harry Potter.
 | id | Stack |
 |---|---|
 | `nextjs` | Next.js + `react-instantsearch` |
+| `solid` | SolidJS + `instantsearch.js` connectors, bundled by Vite |
 | `vanilla` | Vanilla JS + `instantsearch.js`, bundled by Vite |
 
 Both give you the same app. A template is a manifest plus a file overlay, so
