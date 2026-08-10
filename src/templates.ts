@@ -64,6 +64,12 @@ export interface TemplateManifest {
   seedCommand: string
   /** Overlay directory, relative to the template dir. */
   files: string
+  /**
+   * Paths in the scaffolded project the overlay supersedes, deleted after it is
+   * applied. A framework CLI ships a demo page and its assets; once our own page
+   * replaces the entry point, those become dead files the user has to reason about.
+   */
+  remove: string[]
   devCommand: string
   devUrl: string
 }
@@ -90,6 +96,7 @@ const MANIFEST_KEYS = [
   'env',
   'seedCommand',
   'files',
+  'remove',
   'devCommand',
   'devUrl',
 ] as const
@@ -182,6 +189,20 @@ function validateDeps(raw: unknown, source: string): string[] {
   })
 }
 
+/** Optional: most templates supersede nothing. Same path guard as `files`. */
+function validateRemove(raw: unknown, source: string): string[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) {
+    throw new TemplateManifestError(source, '"remove" must be an array when present')
+  }
+  return raw.map((entry, index) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new TemplateManifestError(source, `"remove[${index}]" must be a non-empty string`)
+    }
+    return requireRelativePath(entry, `remove[${index}]`, source)
+  })
+}
+
 /** Optional, unlike deps: a template may need no extra tooling. */
 function validateDevDeps(raw: unknown, source: string): string[] {
   if (raw === undefined) return []
@@ -238,6 +259,7 @@ export function validateManifest(raw: unknown, source: string): TemplateManifest
     env: validateEnv(raw['env'], source),
     seedCommand: requireString(raw, 'seedCommand', source),
     files: requireRelativePath(requireString(raw, 'files', source), 'files', source),
+    remove: validateRemove(raw['remove'], source),
     devCommand: requireString(raw, 'devCommand', source),
     devUrl,
   }

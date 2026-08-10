@@ -8,7 +8,7 @@ import type { ProjectConfig } from './config.js'
 import { readPackageVersion, templatesDir } from './paths.js'
 import { resolveDefaults, runPrompts } from './prompts.js'
 import { addPackageScripts, installDependencies, projectScripts } from './steps/deps.js'
-import { applyOverlay } from './steps/overlay.js'
+import { applyOverlay, removeSuperseded } from './steps/overlay.js'
 import { provisionServer } from './steps/provision.js'
 import { ensureScaffold } from './steps/scaffold.js'
 import { setUpSearch } from './steps/searchSetup.js'
@@ -92,6 +92,11 @@ async function main(): Promise<number> {
       config.targetDir,
     )
     build.message(`Wrote ${written.length} template files`)
+
+    const removed = await removeSuperseded(config.targetDir, config.template.remove)
+    if (removed.length > 0) {
+      build.message(`Removed ${removed.length} superseded scaffold files`)
+    }
 
     await installDependencies(config.targetDir, config.template.deps, config.template.devDeps, {
       onStep: (step) => build.message(step),

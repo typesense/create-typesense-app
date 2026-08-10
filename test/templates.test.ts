@@ -142,9 +142,17 @@ describe('validateManifest', () => {
 })
 
 describe('bundled templates', () => {
-  it('ships exactly one template, by design', async () => {
+  it('ships the templates in the directory, nextjs first as the default', async () => {
     const templates = await loadTemplates()
-    expect(templates.map((template) => template.id)).toEqual(['nextjs'])
+    expect(templates.map((template) => template.id)).toEqual(['nextjs', 'vanilla'])
+  })
+
+  it('gives each template its own env conventions rather than assuming one', async () => {
+    const [nextjs, vanilla] = await loadTemplates()
+    expect(nextjs?.env.publicPrefix).toBe('NEXT_PUBLIC_')
+    expect(vanilla?.env.publicPrefix).toBe('VITE_')
+    expect(nextjs?.env.file).not.toBe(vanilla?.env.file)
+    expect(nextjs?.seedCommand).not.toBe(vanilla?.seedCommand)
   })
 
   it.each(TEMPLATE_IDS)('%s satisfies the contract', async (id) => {
@@ -154,11 +162,7 @@ describe('bundled templates', () => {
     expect(manifest.deps).toContain('typesense-instantsearch-adapter')
   })
 
-  it("declares Next.js's own env conventions rather than assuming defaults", async () => {
-    const [nextjs] = await loadTemplates()
-    expect(nextjs?.env.publicPrefix).toBe('NEXT_PUBLIC_')
-    expect(nextjs?.env.file).toBe('.env.local')
-  })
+
 
   it('reports a helpful error for an unknown template id', async () => {
     await expect(loadTemplate('svelte')).rejects.toThrow(/file not found/)
@@ -166,10 +170,13 @@ describe('bundled templates', () => {
 })
 
 describe('resolveTemplateWithoutPrompting', () => {
-  it('settles on the only template there is, so no pointless one-option prompt', async () => {
-    const templates = await loadTemplates()
-    expect(templates).toHaveLength(1)
-    expect(resolveTemplateWithoutPrompting(templates)?.id).toBe('nextjs')
+  it('defers to the prompt now that there is a real choice', async () => {
+    expect(resolveTemplateWithoutPrompting(await loadTemplates())).toBeUndefined()
+  })
+
+  it('settles immediately when only one template is bundled', async () => {
+    const [nextjs] = await loadTemplates()
+    expect(resolveTemplateWithoutPrompting([nextjs!])?.id).toBe('nextjs')
   })
 
   it('honours an explicit id', async () => {
@@ -182,12 +189,11 @@ describe('resolveTemplateWithoutPrompting', () => {
     expect(() => resolveTemplateWithoutPrompting(templates, 'astro')).toThrow(/Unknown template/)
   })
 
-  /** Guards the day a second template returns: the prompt must come back with it. */
-  it('defers to a prompt when there is more than one to choose from', async () => {
-    const [nextjs] = await loadTemplates()
-    const pretendSecond = { ...nextjs!, id: 'other', name: 'Other' }
-    expect(resolveTemplateWithoutPrompting([nextjs!, pretendSecond])).toBeUndefined()
+  it('honours vanilla too', async () => {
+    expect(resolveTemplateWithoutPrompting(await loadTemplates(), 'vanilla')?.id).toBe('vanilla')
   })
+
+
 })
 
 describe('the contract carries everything framework-specific', () => {
@@ -222,5 +228,30 @@ describe('the contract carries everything framework-specific', () => {
       .map((entry) => entry.name)
       .sort()
     expect([...TEMPLATE_IDS].sort()).toEqual(onDisk)
+  })
+})
+
+describe('remove', () => {
+  it('defaults to nothing when a template does not need it', () => {
+    expect(validateManifest(validManifest(), source).remove).toEqual([])
+  })
+
+  it('accepts a list of paths the overlay supersedes', () => {
+    const manifest = validManifest()
+    manifest['remove'] = ['src/counter.js', 'src/assets']
+    expect(validateManifest(manifest, source).remove).toEqual(['src/counter.js', 'src/assets'])
+  })
+
+  /** Same guard as `files`: a template must not reach outside the project. */
+  it.each(['../../etc/passwd', '/etc/passwd'])('rejects the escaping path %s', (bad) => {
+    expectRejected((manifest) => {
+      manifest['remove'] = [bad]
+    }, /must (not contain "\.\."|be relative)/)
+  })
+
+  it('rejects a non-array', () => {
+    expectRejected((manifest) => {
+      manifest['remove'] = 'src/counter.js'
+    }, /"remove" must be an array/)
   })
 })

@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildScaffoldCommand, tokenizeCommand } from '../src/steps/scaffold.js'
-import { applyOverlay } from '../src/steps/overlay.js'
+import { buildScaffoldCommand, scaffoldInvocation, tokenizeCommand } from '../src/steps/scaffold.js'
+import { applyOverlay, removeSuperseded } from '../src/steps/overlay.js'
 import { addPackageScripts, mergeScripts, projectScripts } from '../src/steps/deps.js'
 import {
   clearRunState,
@@ -323,5 +323,67 @@ describe('projectScripts', () => {
   it('uses whatever runner a manifest declares', () => {
     const pretend = { ...nextjsTemplate, seedCommand: 'node --run seed' }
     expect(projectScripts(pretend)['seed']).toBe('node --run seed')
+  })
+})
+
+describe('removeSuperseded', () => {
+  it('deletes the files a template says its overlay replaces', async () => {
+    const dir = scratch()
+    writeFileSync(path.join(dir, 'counter.js'), 'export const x = 1')
+    writeFileSync(path.join(dir, 'keep.js'), 'keep me')
+
+    expect(await removeSuperseded(dir, ['counter.js'])).toEqual(['counter.js'])
+    expect(existsSync(path.join(dir, 'counter.js'))).toBe(false)
+    expect(existsSync(path.join(dir, 'keep.js'))).toBe(true)
+  })
+
+  it('deletes a directory and its contents', async () => {
+    const dir = scratch()
+    mkdirSync(path.join(dir, 'assets'))
+    writeFileSync(path.join(dir, 'assets', 'logo.svg'), '<svg/>')
+
+    await removeSuperseded(dir, ['assets'])
+    expect(existsSync(path.join(dir, 'assets'))).toBe(false)
+  })
+
+  /** A framework CLI may stop shipping a file; that must not fail the run. */
+  it('ignores paths that are already gone', async () => {
+    expect(await removeSuperseded(scratch(), ['never-existed.js'])).toEqual([])
+  })
+
+  it('does nothing when the list is empty', async () => {
+    expect(await removeSuperseded(scratch(), [])).toEqual([])
+  })
+
+  it('refuses a path that escapes the project directory', async () => {
+    await expect(removeSuperseded(scratch(), ['../outside.txt'])).rejects.toThrow(/outside/)
+  })
+})
+
+describe('scaffoldInvocation', () => {
+  /**
+   * Regression: create-vite treats its directory argument as relative to cwd even
+   * when handed an absolute path, silently building a nested tree
+   * (private/tmp/.../my-app) and leaving the real target empty. create-next-app
+   * accepts either. A bare name in the parent directory works for both.
+   */
+  it('passes a bare directory name and runs in the parent', () => {
+    const { args, cwd } = scaffoldInvocation(nextjsTemplate, '/tmp/somewhere/my-app')
+    expect(args).toContain('my-app')
+    expect(args).not.toContain('/tmp/somewhere/my-app')
+    expect(cwd).toBe('/tmp/somewhere')
+  })
+
+  it('does the same for the vanilla template', async () => {
+    const vanilla = await loadTemplate('vanilla')
+    const { command, args, cwd } = scaffoldInvocation(vanilla, '/tmp/somewhere/my-app')
+    expect(command).toBe('npm')
+    expect(args).toEqual(['create', 'vite@latest', 'my-app', '--', '--template', 'vanilla'])
+    expect(cwd).toBe('/tmp/somewhere')
+  })
+
+  it('keeps a name containing spaces as a single argument', () => {
+    const { args } = scaffoldInvocation(nextjsTemplate, '/tmp/some dir/my app')
+    expect(args).toContain('my app')
   })
 })

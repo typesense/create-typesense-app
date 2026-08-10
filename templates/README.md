@@ -6,10 +6,13 @@ Almost everything this CLI does is framework-agnostic — Docker and CORS, the
 collection schema, the JSONL import, scoping the search-only key, writing the env
 file. A template's job is only to describe the parts that genuinely differ.
 
-Exactly one template ships today (`nextjs`). The indirection is still here because
-it keeps the framework-specific surface small, declarative, and in one place: no
-framework's name appears anywhere in `src/`, so adding a template is a change to
-this directory alone.
+No framework's name appears anywhere in `src/`, so adding a template is a change
+to this directory alone.
+
+| Template | Stack | Env prefix |
+|---|---|---|
+| `nextjs` | Next.js + `react-instantsearch` | `NEXT_PUBLIC_` |
+| `vanilla` | Vanilla JS + `instantsearch.js`, bundled by Vite | `VITE_` |
 
 ## Layout
 
@@ -40,6 +43,7 @@ ignored — so adding a field means updating `MANIFEST_KEYS` there and this tabl
 | `env.publicPrefix` | string | prefix that makes a variable browser-visible. SCREAMING_SNAKE_CASE, **must** end with `_` |
 | `seedCommand` | string | wired up as `npm run seed`; names the runner from `devDeps` |
 | `files` | string | overlay directory, relative to the template directory |
+| `remove` | string[] | optional; paths in the scaffolded project the overlay supersedes, deleted after it is applied |
 | `devCommand` | string | e.g. `npm run dev` |
 | `devUrl` | string | http(s) URL, printed at the end |
 
@@ -50,6 +54,10 @@ reimplementing it. Two things learned the hard way:
 
 - It is tokenised *before* `{{dir}}` is substituted, so a project directory
   containing spaces stays one argument.
+- `{{dir}}` is a **bare directory name**, and the command runs in the parent.
+  Do not assume an absolute path works: `create-vite` treats its argument as
+  relative even when it is absolute, so `/tmp/x/my-app` builds `tmp/x/my-app`
+  *inside* the current directory, leaves the real target empty, and exits 0.
 - Pass whatever flag skips the framework's own dependency install
   (`--skip-install` for `create-next-app`). The dependency step then installs the
   framework's dependencies and the template's in a single pass.
@@ -73,6 +81,11 @@ cannot be exposed by a template getting this wrong.
 
 Everything under `files/` is copied into the project verbatim, preserving
 directory structure. `.gitkeep` is skipped.
+
+Framework starters ship a demo page and its artwork. Once your entry point
+replaces theirs, those files linger as unreferenced clutter a reader cannot tell
+apart from the real thing, so list them in `remove`. The vanilla template drops
+`src/counter.js`, `src/assets` and `public/icons.svg` this way.
 
 The overlay **owns what it writes** and overwrites existing files — replacing the
 framework's placeholder home page is the point. Keep it to files you mean to own;
