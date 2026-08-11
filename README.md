@@ -2,7 +2,7 @@
 
 Typo-tolerant Typesense search, running locally, in one command.
 
-![Next.js installed, the server reporting healthy, 9979 books indexed, and "hary potr" finding Harry Potter](https://raw.githubusercontent.com/Nikhiladiga/create-typesense-app/main/docs/demo.gif)
+![Choosing a framework at the prompt, then the server starting, 9979 books being indexed, and "hary potr" finding Harry Potter](https://raw.githubusercontent.com/typesense/create-typesense-app/master/docs/demo.gif)
 
 > **Compatibility note:**
 > Requires [Node.js](https://nodejs.org) 22+. Docker is optional. Without it, point
