@@ -38,7 +38,8 @@ function describeServer(config: ProjectConfig): string {
  * on it.
  */
 export function summaryLines(config: ProjectConfig): string[] {
-  const { template } = config
+  const { template, server } = config
+  const local = server.kind === 'docker'
 
   return [
     row('Directory', config.targetDir),
@@ -46,9 +47,13 @@ export function summaryLines(config: ProjectConfig): string[] {
     row('Server', describeServer(config)),
     row(
       'Collection',
-      config.dataset === 'books'
+      local
         ? `"${COLLECTION_NAME}" + ${DATASET_APPROX_COUNT} titles (downloaded)`
-        : 'none (empty — bring your own JSON)',
+        : `${
+            server.collections.length > 0
+              ? server.collections.map((name) => `"${name}"`).join(', ')
+              : 'every collection and alias the key can see'
+          } ${pc.dim('(read-only)')}`,
     ),
     row('Install', template.deps.join(', ')),
     '',
@@ -57,11 +62,22 @@ export function summaryLines(config: ProjectConfig): string[] {
       '  browser',
       PUBLIC_ENV_VARS.map((name) => `${template.env.publicPrefix}${name}`).join('\n'),
     ),
-    row('  server', `${PRIVATE_ENV_VARS.join(', ')} ${pc.dim('(admin — never prefixed)')}`),
+    // An existing server's admin key never reaches the CLI, let alone the project.
+    ...(local
+      ? [row('  server', `${PRIVATE_ENV_VARS.join(', ')} ${pc.dim('(admin — never prefixed)')}`)]
+      : []),
   ]
 }
 
 export function nextStepsLines(config: ProjectConfig): string[] {
+  if (config.server.kind === 'byo') {
+    return [
+      `cd ${config.projectName}`,
+      `${config.template.devCommand}${pc.dim(`   # ${config.template.devUrl}`)}`,
+      '',
+      pc.dim('Change what the page searches and shows in typesense.config.json.'),
+    ]
+  }
   return [
     `cd ${config.projectName}`,
     `${config.template.devCommand}${pc.dim(`   # ${config.template.devUrl} — type "hary potr"`)}`,

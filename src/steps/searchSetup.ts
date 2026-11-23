@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { COLLECTION_NAME, DEMO_QUERY_BY, TYPO_DEMO_QUERY } from '../constants.js'
+import { DEMO_QUERY_BY, TYPO_DEMO_QUERY } from '../constants.js'
 import type { ProjectConfig } from '../config.js'
 import { createTypesenseClient } from '../util/typesense.js'
-import { copySchemaInto, loadBooksSchema, recreateCollection } from './collection.js'
+import { loadBooksSchema, recreateCollection } from './collection.js'
+import { ensureSearchConfigFile, inferSearchConfig, SEARCH_CONFIG_FILE } from './searchConfig.js'
 import { ensureDataset } from './dataset.js'
 import { connectionEnvValues, writeEnvFile } from './env.js'
 import { createSearchOnlyKey } from './keys.js'
@@ -22,8 +23,6 @@ export interface SearchSetupResult {
   /** The browser-safe key. The admin key stays in ProvisionedServer. */
   searchOnlyKey: string
   replacedCollection: boolean
-  /** Where the sample data was copied, if it was. */
-  datasetDir?: string
   /** Proof the aha moment works, obtained with the search-only key. */
   verification: TypoVerification
 }
@@ -49,29 +48,28 @@ export async function setUpSearch(
   // Only the CLI ever holds the admin key.
   const admin = createTypesenseClient(server.baseUrl, server.adminKey)
 
-  const schema = await loadBooksSchema()
+  const books = await loadBooksSchema()
+  const searchFile = await ensureSearchConfigFile(targetDir, {
+    collections: [{ name: books.name, schema: books, search: inferSearchConfig(books) }],
+  })
+  const schema = searchFile.collections[0]?.schema
+  if (schema === undefined) {
+    throw new Error(`${SEARCH_CONFIG_FILE} lists no collections.`)
+  }
+
   const { replaced } = await recreateCollection(admin, schema)
   onStep(`${replaced ? 'Recreated' : 'Created'} collection "${schema.name}"`)
 
-  // The schema goes in even for an empty collection: it is the file to edit first.
-  await copySchemaInto(targetDir)
+  // Fetched, not bundled. Lands directly in the project so the user's own seed
+  // script can re-run it offline.
+  const dataset = await ensureDataset(targetDir, { onProgress: onStep })
 
-  let documentsImported = 0
-  let datasetDir: string | undefined
-  if (config.dataset === 'books') {
-    // Fetched, not bundled. Lands directly in the project so the user's own seed
-    // script can re-run it offline.
-    const dataset = await ensureDataset(targetDir, { onProgress: onStep })
-    datasetDir = path.dirname(dataset.path)
-
-    const outcome = await seedCollection(
-      admin,
-      schema.name,
-      await readFile(dataset.path, 'utf8'),
-    )
-    documentsImported = outcome.imported
-    onStep(`Indexed ${documentsImported} documents`)
-  }
+  const { imported: documentsImported } = await seedCollection(
+    admin,
+    schema.name,
+    await readFile(dataset.path, 'utf8'),
+  )
+  onStep(`Indexed ${documentsImported} documents`)
 
   const searchOnlyKey = await createSearchOnlyKey(admin, schema.name)
   onStep('Generated a search-only API key')
@@ -86,19 +84,14 @@ export async function setUpSearch(
   )
   onStep(`Wrote ${template.env.file}`)
 
-  const verification = await verifyTypoSearch(server.baseUrl, searchOnlyKey, schema.name, {
-    expectDocuments: config.dataset === 'books',
-  })
-  if (config.dataset === 'books') {
-    onStep(`Verified: "${verification.query}" finds ${verification.topHit}`)
-  }
+  const verification = await verifyTypoSearch(server.baseUrl, searchOnlyKey, schema.name)
+  onStep(`Verified: "${verification.query}" finds ${verification.topHit}`)
 
   return {
-    collection: COLLECTION_NAME,
+    collection: schema.name,
     documentsImported,
     searchOnlyKey,
     replacedCollection: replaced,
-    datasetDir,
     verification,
   }
 }
@@ -114,7 +107,6 @@ export async function verifyTypoSearch(
   baseUrl: string,
   searchOnlyKey: string,
   collection: string,
-  { expectDocuments = true }: { expectDocuments?: boolean } = {},
 ): Promise<TypoVerification> {
   const browser = createTypesenseClient(baseUrl, searchOnlyKey)
   const result = await browser.search(collection, {
@@ -124,7 +116,7 @@ export async function verifyTypoSearch(
 
   const topHit = String(result.hits[0]?.document['title'] ?? '')
 
-  if (expectDocuments && result.found === 0) {
+  if (result.found === 0) {
     throw new Error(
       `The collection was indexed but searching "${TYPO_DEMO_QUERY}" returned nothing. ` +
         `Expected typo-tolerant matches over ${DEMO_QUERY_BY}.`,

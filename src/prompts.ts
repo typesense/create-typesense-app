@@ -1,18 +1,41 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { cancel, isCancel, log, password, select, text } from '@clack/prompts'
+import {
+  cancel,
+  confirm,
+  isCancel,
+  log,
+  multiselect,
+  note,
+  password,
+  select,
+  text,
+} from '@clack/prompts'
 import pc from 'picocolors'
 import {
-  DATASET_APPROX_COUNT,
+  ADMIN_KEY_VAR,
   DEFAULT_PORT,
+  SEARCH_KEY_VAR,
   DEFAULT_PROJECT_NAME,
   STATE_FILE,
 } from './constants.js'
+import { splitNames, validateServerUrl } from './cli.js'
 import { COMPOSE_FILE } from './steps/compose.js'
+import {
+  keyNeeds,
+  listRefusedMessage,
+  listSearchable,
+  searchKeyCommand,
+} from './steps/existingServer.js'
+import { showCommand } from './util/clipboard.js'
+import type { SearchConfig, SearchField } from './steps/searchConfig.js'
+import { waitForHealth } from './steps/server.js'
 import { hasRunState } from './util/state.js'
-import type { Dataset, ProjectConfig, ServerConfig } from './config.js'
+import type { ProjectConfig, ServerConfig } from './config.js'
 import { resolveTemplateWithoutPrompting, type TemplateManifest } from './templates.js'
 import type { DockerStatus } from './util/docker.js'
+import { isPortInUse, nextFreePort } from './util/port.js'
+import { createTypesenseClient, type StoredAlias, type StoredCollection } from './util/typesense.js'
 
 export interface PromptOptions {
   templates: TemplateManifest[]
@@ -22,9 +45,13 @@ export interface PromptOptions {
   projectName?: string
   /** Pre-filled from `--template`, skips the framework prompt. */
   templateId?: string
-  /** Pre-filled from `--dataset`, skips the sample-data prompt. */
-  dataset?: Dataset
   port: number
+  /** From `--server-url`: an existing server, so no Docker. */
+  serverUrl?: string
+  /** From `--collections`. */
+  collections?: string[]
+  /** From `--api-key-stdin` or the environment; never from a flag value. */
+  apiKey?: string
 }
 
 /** Clack returns a symbol when the user hits Ctrl-C. Exit the way a shell expects. */
@@ -76,21 +103,6 @@ export function validateTargetDir(dir: string): string | undefined {
     return `${path.basename(dir)}/ is not empty (${entries.length} ${
       entries.length === 1 ? 'entry' : 'entries'
     }). Pick another name.`
-  }
-  return undefined
-}
-
-function validateServerUrl(value: string): string | undefined {
-  const raw = value.trim()
-  if (raw === '') return 'A server URL is required.'
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    return 'Enter a full URL, e.g. http://localhost:8108'
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return 'URL must start with http:// or https://'
   }
   return undefined
 }
@@ -151,15 +163,19 @@ async function askServer(options: PromptOptions): Promise<ServerConfig> {
           label: 'Spin one up locally with Docker',
           hint: dockerHint,
         },
-        { value: 'existing', label: 'I already have one running', hint: 'bring your own URL' },
-        { value: 'cloud', label: 'Typesense Cloud', hint: 'paste your cluster URL and admin key' },
+        {
+          value: 'existing',
+          label: 'I already have one running',
+          hint: 'read-only, bring your own URL',
+        },
+        { value: 'cloud', label: 'Typesense Cloud', hint: 'read-only, paste your cluster URL' },
       ],
     }),
   )
 
   if (kind === 'docker') {
     if (!options.docker.available) {
-      // Don't hard-fail; the two BYO paths are still open (PLAN.md §7).
+      // Don't hard-fail; the existing server paths are still open (PLAN.md §7).
       log.warn(
         `Docker is unavailable: ${options.docker.reason}\n` +
           'Pick "I already have one running" or "Typesense Cloud" instead.',
@@ -169,51 +185,300 @@ async function askServer(options: PromptOptions): Promise<ServerConfig> {
     return { kind: 'docker', port: options.port }
   }
 
+  return askExistingServer(kind, options)
+}
+
+/**
+ * The URL, key and collection of a server the developer already runs.
+ *
+ * `hint` is printed above the key prompt, for the case where the CLI found the
+ * server itself and can say where its key most likely is.
+ */
+async function askExistingServer(
+  kind: 'existing' | 'cloud',
+  options: Pick<PromptOptions, 'apiKey' | 'collections'>,
+  defaultUrl = `http://localhost:${DEFAULT_PORT}`,
+  hint?: string,
+): Promise<ServerConfig> {
+  const fallback = kind === 'cloud' ? '' : defaultUrl
   const url = unwrap(
     await text({
       message: kind === 'cloud' ? 'Cluster URL' : 'Server URL',
-      placeholder:
-        kind === 'cloud'
-          ? 'https://xxx.a1.typesense.net'
-          : `http://localhost:${DEFAULT_PORT}`,
-      defaultValue: kind === 'cloud' ? '' : `http://localhost:${DEFAULT_PORT}`,
-      validate: (value) =>
-        validateServerUrl(value || (kind === 'cloud' ? '' : `http://localhost:${DEFAULT_PORT}`)),
+      placeholder: kind === 'cloud' ? 'https://xxx.a1.typesense.net' : defaultUrl,
+      defaultValue: fallback,
+      validate: (value) => validateServerUrl(value || fallback),
     }),
   )
+  const serverUrl = (url || fallback).trim().replace(/\/+$/, '')
 
-  const adminKey = unwrap(
+  let apiKey = options.apiKey
+  if (apiKey === undefined) {
+    if (hint) log.info(hint)
+    else {
+      log.info(keyNeeds())
+      await showCommand(searchKeyCommand(serverUrl, ['*']))
+    }
+    apiKey = await askSearchKey()
+  }
+
+  const collections = options.collections ?? (await askCollections(serverUrl, apiKey))
+  return { kind: 'byo', flavour: kind, url: serverUrl, apiKey, collections }
+}
+
+/** The key prompt's check. The key is the one the browser gets. */
+export function validateSearchKey(value: string | undefined): string | undefined {
+  return (value ?? '').trim() === ''
+    ? 'Required. An admin key is refused, because the browser gets this key.'
+    : undefined
+}
+
+async function askSearchKey(): Promise<string> {
+  return unwrap(
     await password({
-      message: 'Admin API key',
-      validate: (value) =>
-        (value ?? '').trim() === ''
-          ? 'Required — it creates the collection and the search-only key. It is never exposed to the browser.'
-          : undefined,
+      message: 'Search key (documents:search, collections:get, collections:list)',
+      validate: validateSearchKey,
+    }),
+  ).trim()
+}
+
+/** The picker's options: each collection and alias, with its document count. */
+export function collectionChoices(
+  collections: Pick<StoredCollection, 'name' | 'num_documents'>[],
+  aliases: StoredAlias[],
+): { value: string; label: string; hint: string }[] {
+  const count = new Map(
+    collections.map((collection) => [collection.name, collection.num_documents]),
+  )
+  const documents = (name: string) => `${(count.get(name) ?? 0).toLocaleString()} documents`
+  return [
+    ...collections.map((collection) => ({
+      value: collection.name,
+      label: collection.name,
+      hint: documents(collection.name),
+    })),
+    ...aliases.map((alias) => ({
+      value: alias.name,
+      label: alias.name,
+      hint: `alias → ${alias.collection_name}, ${documents(alias.collection_name)}`,
+    })),
+  ]
+}
+
+/** The chosen names whose collection holds no documents. An alias counts its target. */
+export function emptySelections(
+  chosen: string[],
+  collections: Pick<StoredCollection, 'name' | 'num_documents'>[],
+  aliases: StoredAlias[],
+): string[] {
+  const count = new Map(
+    collections.map((collection) => [collection.name, collection.num_documents]),
+  )
+  const target = new Map(aliases.map((alias) => [alias.name, alias.collection_name]))
+  return chosen.filter((name) => (count.get(target.get(name) ?? name) ?? 0) === 0)
+}
+
+/**
+ * Lists the collections and aliases the key can see, with document counts; falls
+ * back to typing names if it cannot list them.
+ */
+async function askCollections(url: string, apiKey: string): Promise<string[]> {
+  const { collections, aliases, listRefused } = await listSearchable(
+    createTypesenseClient(url, apiKey),
+  )
+  if (!listRefused && collections.length === 0 && aliases.length === 0) {
+    throw new Error(`${url} has no collections that the key can see.`)
+  }
+  if (listRefused) {
+    log.warn(listRefusedMessage())
+    await showCommand(searchKeyCommand(url, ['*']))
+    const typed = unwrap(
+      await text({
+        message: 'Collections to search (comma-separated)',
+        validate: (value) =>
+          splitNames(value ?? '').length === 0 ? 'Name at least one collection.' : undefined,
+      }),
+    )
+    return splitNames(typed)
+  }
+
+  const chosen = unwrap(
+    await multiselect({
+      message: 'Collections to search?',
+      options: collectionChoices(collections, aliases),
+      required: true,
+    }),
+  )
+  for (const name of emptySelections(chosen, collections, aliases)) {
+    log.warn(`"${name}" has no documents, so its section will be empty.`)
+  }
+  return chosen
+}
+
+/**
+ * Shows the inferred search config and, if the developer wants, lets them change
+ * each part. Only offers what Typesense can do: searched and facet fields must be
+ * indexed text, and the title must be a searched field so it can be highlighted.
+ */
+export async function reviewSearchConfig(
+  name: string,
+  fields: SearchField[],
+  search: SearchConfig,
+): Promise<SearchConfig> {
+  note(
+    [
+      `Searches  ${search.queryBy.join(', ')}`,
+      `Facets    ${search.facets.join(', ') || 'none'}`,
+      `Title     ${search.title}`,
+      `Image     ${search.image ?? 'none'}`,
+    ].join('\n'),
+    `Search config for "${name}"`,
+  )
+  if (unwrap(await confirm({ message: 'Use this search config?' }))) return search
+
+  const choices = searchConfigChoices(fields)
+  const option = (name: string) => ({ value: name, label: name })
+
+  const queryBy = unwrap(
+    await multiselect({
+      message: 'Fields to search',
+      options: choices.searchable.map(option),
+      initialValues: search.queryBy,
+      required: true,
+    }),
+  )
+  const facets =
+    choices.facetable.length === 0
+      ? []
+      : unwrap(
+          await multiselect({
+            message: 'Facets',
+            options: choices.facetable.map(option),
+            initialValues: search.facets,
+            required: false,
+          }),
+        )
+  const title = unwrap(
+    await select({
+      message: 'Hit title',
+      options: queryBy.map(option),
+      initialValue: queryBy.includes(search.title) ? search.title : queryBy[0],
+    }),
+  )
+  const imageChoice = unwrap(
+    await select({
+      message: 'Image field',
+      options: [{ value: '', label: 'none' }, ...choices.images.map(option)],
+      initialValue: search.image ?? '',
     }),
   )
 
+  return buildSearchConfig(fields, {
+    queryBy,
+    facets,
+    title,
+    image: imageChoice === '' ? null : imageChoice,
+  })
+}
+
+/**
+ * The fields the review may offer for each part. Only what Typesense can do:
+ * searched and facet fields must be indexed text, and the image must be a string.
+ */
+export function searchConfigChoices(fields: SearchField[]): {
+  searchable: string[]
+  facetable: string[]
+  images: string[]
+} {
+  const named = fields.filter((field) => field.name !== '.*')
+  const text = named.filter(
+    (field) => (field.type === 'string' || field.type === 'string[]') && field.index !== false,
+  )
   return {
-    kind: 'byo',
-    flavour: kind,
-    url: (url || `http://localhost:${DEFAULT_PORT}`).trim().replace(/\/+$/, ''),
-    adminKey: adminKey.trim(),
+    searchable: text.map((field) => field.name),
+    facetable: text.filter((field) => field.facet === true).map((field) => field.name),
+    images: named.filter((field) => field.type === 'string').map((field) => field.name),
   }
 }
 
-async function askDataset(): Promise<Dataset> {
-  return unwrap(
-    await select<Dataset>({
-      message: 'Sample data?',
-      options: [
-        {
-          value: 'books',
-          label: 'Books',
-          hint: `${DATASET_APPROX_COUNT} real titles, downloaded — best for seeing typo tolerance`,
-        },
-        { value: 'empty', label: 'Empty', hint: "I'll bring my own JSON" },
-      ],
-    }),
-  )
+/** The search config from the review's answers. Every other field is shown in the hit. */
+export function buildSearchConfig(
+  fields: SearchField[],
+  answers: Omit<SearchConfig, 'display'>,
+): SearchConfig {
+  return {
+    ...answers,
+    display: fields
+      .map((field) => field.name)
+      .filter((name) => name !== '.*' && name !== answers.title && name !== answers.image),
+  }
+}
+
+export type PortAction = 'keep' | 'next' | 'ask-reuse' | 'ask-next'
+
+/** What to do about the local server's port. Pure, so every branch is testable. */
+export function portAction(inUse: boolean, typesense: boolean, interactive: boolean): PortAction {
+  if (!inUse) return 'keep'
+  if (!interactive) return 'next'
+  return typesense ? 'ask-reuse' : 'ask-next'
+}
+
+/**
+ * Settles the local server's port before anything is pulled or written.
+ *
+ * A Typesense already on the port can be reused, read-only, as an existing
+ * server; anything else means moving to the next free port. `--yes` moves
+ * without asking. The template only names the env file in the key hint.
+ */
+export async function settleLocalServer(
+  port: number,
+  interactive: boolean,
+  template: TemplateManifest,
+  options: Pick<PromptOptions, 'apiKey' | 'collections'> = {},
+): Promise<ServerConfig> {
+  const inUse = await isPortInUse(port)
+  const typesense =
+    inUse &&
+    (await waitForHealth(`http://127.0.0.1:${port}`, { timeoutMs: 1_500 }).then(
+      () => true,
+      () => false,
+    ))
+
+  const action = portAction(inUse, typesense, interactive)
+  if (action === 'keep') return { kind: 'docker', port }
+
+  const next = await nextFreePort(port)
+  if (action === 'next') {
+    log.info(`Port ${port} is in use, so the local server will use port ${next}.`)
+  } else if (action === 'ask-reuse') {
+    const choice = unwrap(
+      await select({
+        message: `Typesense already runs at localhost:${port}.`,
+        options: [
+          { value: 'reuse', label: 'Use it', hint: 'read-only, asks for a search key' },
+          { value: 'new', label: `Start a new local server on port ${next}` },
+        ],
+      }),
+    )
+    if (choice === 'reuse') {
+      return askExistingServer(
+        'existing',
+        options,
+        `http://localhost:${port}`,
+        `If an earlier create-typesense-app run started it, its ${template.env.publicPrefix}${SEARCH_KEY_VAR} is in that project's ${template.env.file}.`,
+      )
+    }
+  } else {
+    const move = unwrap(
+      await confirm({
+        message: `Port ${port} is used by another program. Start Typesense on port ${next}?`,
+      }),
+    )
+    if (!move) {
+      cancel(`Cancelled. Free port ${port}, or pass another one with --port.`)
+      process.exit(130)
+    }
+  }
+  return { kind: 'docker', port: next }
 }
 
 export async function runPrompts(options: PromptOptions): Promise<ProjectConfig> {
@@ -224,15 +489,48 @@ export async function runPrompts(options: PromptOptions): Promise<ProjectConfig>
 
   const projectName = await askProjectName(options)
   const template = await askTemplate(options)
-  const server = await askServer(options)
-  const dataset = options.dataset ?? (await askDataset())
+  let server: ServerConfig
+  if (options.serverUrl === undefined) {
+    server = await askServer(options)
+  } else {
+    const apiKey = await askKeyIfMissing(options)
+    const collections = options.collections ?? (await askCollections(options.serverUrl, apiKey))
+    server = existingServerFromFlags({ ...options, collections }, apiKey)
+  }
 
   return {
     projectName,
     targetDir: path.resolve(options.cwd, projectName),
     template,
     server,
-    dataset,
+  }
+}
+
+async function askKeyIfMissing(options: PromptOptions): Promise<string> {
+  if (options.apiKey !== undefined) return options.apiKey
+  log.info(keyNeeds())
+  await showCommand(searchKeyCommand(options.serverUrl ?? '', ['*']))
+  return askSearchKey()
+}
+
+/** A Typesense Cloud cluster is any host under typesense.net. */
+export function serverFlavour(url: string): 'cloud' | 'existing' {
+  return /\.typesense\.net$/.test(new URL(url).hostname) ? 'cloud' : 'existing'
+}
+
+/** `--server-url` settles the server; the key comes from the environment, stdin or a prompt. */
+function existingServerFromFlags(options: PromptOptions, apiKey: string | undefined): ServerConfig {
+  if (apiKey === undefined || apiKey === '') {
+    throw new Error(
+      `--server-url needs a key: set ${ADMIN_KEY_VAR} to a search key, or pipe one in with --api-key-stdin.`,
+    )
+  }
+  return {
+    kind: 'byo',
+    flavour: serverFlavour(options.serverUrl ?? ''),
+    url: options.serverUrl ?? '',
+    apiKey,
+    collections: options.collections ?? [],
   }
 }
 
@@ -253,10 +551,19 @@ export function resolveDefaults(options: PromptOptions): ProjectConfig {
     throw new Error('No templates are bundled with this package.')
   }
 
+  if (options.serverUrl !== undefined) {
+    return {
+      projectName,
+      targetDir,
+      template,
+      server: existingServerFromFlags(options, options.apiKey),
+    }
+  }
+
   if (!options.docker.available) {
     throw new Error(
       `--yes defaults to a local Docker server, but ${options.docker.reason}\n` +
-        'Start Docker, or drop --yes and choose "I already have one running".',
+        'Start Docker, or pass --server-url to search an existing server.',
     )
   }
 
@@ -265,6 +572,5 @@ export function resolveDefaults(options: PromptOptions): ProjectConfig {
     targetDir,
     template,
     server: { kind: 'docker', port: options.port },
-    dataset: options.dataset ?? 'books',
   }
 }

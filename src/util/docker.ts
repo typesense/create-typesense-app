@@ -57,21 +57,19 @@ export async function checkDocker(): Promise<DockerStatus> {
  */
 export async function runCompose(projectDir: string, args: string[]): Promise<string> {
   try {
-    const result = await execa(
-      'docker',
-      ['compose', '--project-directory', projectDir, ...args],
-      { cwd: projectDir, timeout: 300_000 },
-    )
+    const result = await execa('docker', ['compose', '--project-directory', projectDir, ...args], {
+      cwd: projectDir,
+      timeout: 300_000,
+    })
     return result.stdout
   } catch (error) {
     const stderr =
       typeof error === 'object' && error !== null && 'stderr' in error
         ? String((error as { stderr?: unknown }).stderr ?? '').trim()
         : ''
-    throw new Error(
-      `\`docker compose ${args.join(' ')}\` failed${stderr ? `:\n${stderr}` : '.'}`,
-      { cause: error },
-    )
+    throw new Error(`\`docker compose ${args.join(' ')}\` failed${stderr ? `:\n${stderr}` : '.'}`, {
+      cause: error,
+    })
   }
 }
 
@@ -112,11 +110,12 @@ export async function composePull(
   projectDir: string,
   onLine: (line: string) => void = () => {},
 ): Promise<void> {
-  const subprocess = execa(
-    'docker',
-    ['compose', '--project-directory', projectDir, 'pull'],
-    { cwd: projectDir, timeout: 900_000, all: true, buffer: false },
-  )
+  const subprocess = execa('docker', ['compose', '--project-directory', projectDir, 'pull'], {
+    cwd: projectDir,
+    timeout: 900_000,
+    all: true,
+    buffer: false,
+  })
 
   for await (const line of subprocess.iterable({ from: 'all' })) {
     onLine(String(line))

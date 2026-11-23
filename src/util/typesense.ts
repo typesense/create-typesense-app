@@ -1,5 +1,8 @@
 export interface TypesenseClient {
   collectionExists(name: string): Promise<boolean>
+  getCollection(name: string): Promise<StoredCollection>
+  listCollections(): Promise<StoredCollection[]>
+  listAliases(): Promise<StoredAlias[]>
   createCollection(schema: object): Promise<void>
   deleteCollection(name: string): Promise<void>
   importDocuments(name: string, jsonl: string): Promise<string>
@@ -7,6 +10,8 @@ export interface TypesenseClient {
   listKeys(): Promise<StoredKey[]>
   deleteKey(id: number): Promise<void>
   search(name: string, params: Record<string, string>): Promise<SearchResponse>
+  /** The HTTP status of a request, whatever it is. Throws only when nothing answers. */
+  status(method: string, path: string, body?: string): Promise<number>
 }
 
 export interface KeySpec {
@@ -19,6 +24,18 @@ export interface CreatedKey {
   id: number
   /** Returned in full only at creation time — Typesense never shows it again. */
   value: string
+}
+
+export interface StoredCollection {
+  name: string
+  num_documents: number
+  fields: { name: string; type: string; facet?: boolean; optional?: boolean; index?: boolean }[]
+  default_sorting_field?: string
+}
+
+export interface StoredAlias {
+  name: string
+  collection_name: string
 }
 
 export interface StoredKey {
@@ -57,7 +74,7 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
   async function request(
     method: string,
     path: string,
-    options: { body?: string; contentType?: string; allow404?: boolean } = {},
+    options: { body?: string; contentType?: string; allow404?: boolean; anyStatus?: boolean } = {},
   ): Promise<{ status: number; text: string }> {
     let response: Response
     try {
@@ -80,7 +97,9 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
     }
 
     const text = await response.text()
-    if (!response.ok && !(options.allow404 === true && response.status === 404)) {
+    const allowed =
+      options.anyStatus === true || (options.allow404 === true && response.status === 404)
+    if (!response.ok && !allowed) {
       throw new TypesenseError(
         `Typesense replied ${response.status} to ${method} ${path}: ${text.slice(0, 300)}`,
         response.status,
@@ -104,6 +123,19 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
         allow404: true,
       })
       return status === 200
+    },
+
+    async getCollection(name) {
+      return requestJson<StoredCollection>('GET', `/collections/${encodeURIComponent(name)}`)
+    },
+
+    async listCollections() {
+      return requestJson<StoredCollection[]>('GET', '/collections')
+    },
+
+    async listAliases() {
+      const { aliases } = await requestJson<{ aliases?: StoredAlias[] }>('GET', '/aliases')
+      return aliases ?? []
     },
 
     async createCollection(schema) {
@@ -149,6 +181,16 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
         'GET',
         `/collections/${encodeURIComponent(name)}/documents/search?${query}`,
       )
+    },
+
+    async status(method, path, body) {
+      const options = { anyStatus: true, contentType: 'text/plain' }
+      const { status } = await request(
+        method,
+        path,
+        body === undefined ? options : { ...options, body },
+      )
+      return status
     },
   }
 }

@@ -1,8 +1,9 @@
 /**
  * Rebuilds the collection from data/books.jsonl.
  *
- * Idempotent: it drops the collection, recreates it from scripts/schema.ts, and
- * re-imports every document. Run it after editing the schema or the data.
+ * Idempotent: it drops the collection, recreates it from the schema in
+ * typesense.config.json, and re-imports every document. Run it after editing the
+ * schema or the data.
  *
  *   npm run seed
  *
@@ -12,7 +13,6 @@
  */
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { booksSchema, collectionName } from './schema'
 
 /**
  * Tags the browser-safe key so this script can find its own and avoid piling up a
@@ -42,6 +42,15 @@ async function loadEnv(file: string): Promise<void> {
 
 async function main(): Promise<void> {
   await loadEnv('.env.local')
+
+  const config = JSON.parse(await readFile('typesense.config.json', 'utf8')) as {
+    collections: { name: string; schema: { name: string } }[]
+  }
+  const collection = config.collections[0]
+  if (collection === undefined) {
+    throw new Error('typesense.config.json lists no collections. Re-run create-typesense-app.')
+  }
+  const collectionName = collection.name
 
   // Coalesced rather than checked for undefined so the type stays `string` inside
   // the request helper below.
@@ -88,8 +97,8 @@ async function main(): Promise<void> {
 
   // Drop first: Typesense will not retrofit an existing collection to a new schema.
   await typesense('DELETE', `/collections/${collectionName}`)
-  await typesense('POST', '/collections', JSON.stringify(booksSchema))
-  console.log('  created the collection from scripts/schema.ts')
+  await typesense('POST', '/collections', JSON.stringify(collection.schema))
+  console.log('  created the collection from typesense.config.json')
 
   const result = await typesense(
     'POST',
@@ -120,7 +129,7 @@ async function main(): Promise<void> {
 
   console.log(`  indexed ${imported} documents`)
 
-  await ensureSearchOnlyKey(typesense)
+  await ensureSearchOnlyKey(typesense, collectionName)
 
   console.log('\nDone. Try searching for "hary potr".')
 }
@@ -137,7 +146,13 @@ async function main(): Promise<void> {
  * the only key the browser ever receives.
  */
 async function ensureSearchOnlyKey(
-  typesense: (method: string, endpoint: string, body?: string, contentType?: string) => Promise<string>,
+  typesense: (
+    method: string,
+    endpoint: string,
+    body?: string,
+    contentType?: string,
+  ) => Promise<string>,
+  collectionName: string,
 ): Promise<void> {
   const configured = process.env[SEARCH_KEY_VAR] ?? ''
 

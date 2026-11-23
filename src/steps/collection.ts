@@ -1,4 +1,4 @@
-import { mkdir, copyFile, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { COLLECTION_NAME } from '../constants.js'
 import { dataDir } from '../paths.js'
@@ -9,7 +9,7 @@ export const DATASET_FILE = 'books.jsonl'
 
 export interface CollectionSchema {
   name: string
-  fields: { name: string; type: string; facet?: boolean; optional?: boolean }[]
+  fields: { name: string; type: string; facet?: boolean; optional?: boolean; index?: boolean }[]
   default_sorting_field?: string
 }
 
@@ -17,8 +17,8 @@ export interface CollectionSchema {
  * Reads the bundled schema, forcing the collection name to the CLI's constant so
  * the file and the code cannot drift apart.
  *
- * The schema stays bundled even though the data is fetched: it is ours, it is
- * tiny, and PLAN.md §6 wants it sitting in the project inviting edits.
+ * The schema stays bundled even though the data is fetched: it is ours, and it
+ * is tiny. It reaches the project inside the search config file.
  */
 export async function loadBooksSchema(): Promise<CollectionSchema> {
   const raw = await readFile(path.join(dataDir, SCHEMA_FILE), 'utf8')
@@ -29,15 +29,6 @@ export async function loadBooksSchema(): Promise<CollectionSchema> {
   }
 
   return { ...parsed, name: COLLECTION_NAME }
-}
-
-/** Puts the schema in the user's project — the file PLAN.md §6 wants them to edit first. */
-export async function copySchemaInto(targetDir: string): Promise<string> {
-  const destinationDir = path.join(targetDir, 'data')
-  await mkdir(destinationDir, { recursive: true })
-  const destination = path.join(destinationDir, SCHEMA_FILE)
-  await copyFile(path.join(dataDir, SCHEMA_FILE), destination)
-  return destination
 }
 
 export interface RecreateOutcome {

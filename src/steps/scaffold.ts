@@ -119,9 +119,7 @@ export async function ensureScaffold(
   }
 
   if (!existsSync(path.join(config.targetDir, 'package.json'))) {
-    throw new Error(
-      `Scaffolding reported success but left no package.json in ${config.targetDir}.`,
-    )
+    throw new Error(`Scaffolding reported success but left no package.json in ${config.targetDir}.`)
   }
 
   return { scaffolded: true }

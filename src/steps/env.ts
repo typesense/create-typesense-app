@@ -128,4 +128,32 @@ export async function writeEnvFile(
   await mkdir(path.dirname(filePath), { recursive: true })
   const existing = await readFile(filePath, 'utf8').catch(() => '')
   await writeFile(filePath, upsertEnvContents(existing, values, publicPrefix), 'utf8')
+  await ensureGitIgnored(filePath)
+}
+
+/**
+ * The env file holds the keys, so git must never pick it up. Vite's starters
+ * ignore only `*.local` and Angular's ignores no env file at all, while their
+ * frameworks read `.env`. An overlay cannot ship the fix: npm drops `.gitignore`
+ * files from published packages.
+ */
+export async function ensureGitIgnored(filePath: string): Promise<void> {
+  const gitignore = path.join(path.dirname(filePath), '.gitignore')
+  const name = path.basename(filePath)
+  const contents = await readFile(gitignore, 'utf8').catch(() => '')
+  const covered = contents
+    .split('\n')
+    .map((line) => line.trim())
+    .some(
+      (line) =>
+        line === name || line === `/${name}` || (line === '.env*' && name.startsWith('.env')),
+    )
+  if (covered) return
+
+  const separator = contents === '' || contents.endsWith('\n') ? '' : '\n'
+  await writeFile(
+    gitignore,
+    `${contents}${separator}\n# Typesense keys, written by create-typesense-app. Never commit them.\n/${name}\n`,
+    'utf8',
+  )
 }
