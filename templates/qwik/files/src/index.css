@@ -7,9 +7,8 @@
  * width in app.css only works if nothing above it fights for the same job.
  */
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
+  /* The Typesense palette in app.css is light only. */
+  color-scheme: light;
 }
 
 * {

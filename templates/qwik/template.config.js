@@ -41,8 +41,9 @@ export default {
 
   files: 'files/',
   // The Qwik starter is a landing page. Our app replaces it, which would
-  // otherwise leave its artwork behind as unreferenced files.
-  remove: ['src/assets', 'public/icons.svg'],
+  // otherwise leave its artwork behind as unreferenced files. The overlay's
+  // public/favicon.png is the Typesense favicon, so the starter's goes too.
+  remove: ['src/assets', 'public/icons.svg', 'public/favicon.svg'],
 
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:5173',

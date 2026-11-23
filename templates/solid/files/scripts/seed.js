@@ -1,8 +1,9 @@
 /**
  * Rebuilds the collection from data/books.jsonl.
  *
- * Idempotent: it drops the collection, recreates it from scripts/schema.js, and
- * re-imports every document. Run it after editing the schema or the data.
+ * Idempotent: it drops the collection, recreates it from the schema in
+ * typesense.config.json, and re-imports every document. Run it after editing the
+ * schema or the data.
  *
  *   npm run seed
  *
@@ -42,8 +43,12 @@ async function loadEnv(file) {
 async function main() {
   await loadEnv(ENV_FILE)
 
-  // Imported after the env is loaded, since the schema reads the collection name.
-  const { booksSchema, collectionName } = await import('./schema.js')
+  const config = JSON.parse(await readFile('typesense.config.json', 'utf8'))
+  const collection = config.collections[0]
+  if (collection === undefined) {
+    throw new Error('typesense.config.json lists no collections. Re-run create-typesense-app.')
+  }
+  const collectionName = collection.name
 
   const adminApiKey = process.env.TYPESENSE_API_KEY ?? ''
   if (adminApiKey === '') {
@@ -83,8 +88,8 @@ async function main() {
 
   // Drop first: Typesense will not retrofit an existing collection to a new schema.
   await typesense('DELETE', `/collections/${collectionName}`)
-  await typesense('POST', '/collections', JSON.stringify(booksSchema))
-  console.log('  created the collection from scripts/schema.js')
+  await typesense('POST', '/collections', JSON.stringify(collection.schema))
+  console.log('  created the collection from typesense.config.json')
 
   const result = await typesense(
     'POST',
