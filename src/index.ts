@@ -61,6 +61,17 @@ async function main(): Promise<number> {
     return 0
   }
 
+  // Reading stdin in a terminal would wait for typed input and show the key on
+  // screen as it is typed. The flag is for a key piped in by a script.
+  if (cli.apiKeyStdin && process.stdin.isTTY === true) {
+    process.stderr.write(
+      `${pc.red('✖')} --api-key-stdin reads the key from a pipe, for example:\n` +
+        '  create-typesense-app my-app --yes --server-url <url> --api-key-stdin < key.txt\n' +
+        'In a terminal, leave the flag out: the CLI asks for the key and hides what you type.\n',
+    )
+    return 1
+  }
+
   // Checked before the banner so a non-interactive run fails on one clean line.
   if (!cli.yes && !isInteractive()) {
     process.stderr.write(
