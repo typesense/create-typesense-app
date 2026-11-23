@@ -10,6 +10,7 @@ import { resolveDefaults, reviewSearchConfig, runPrompts, settleLocalServer } fr
 import { readFileSync } from 'node:fs'
 import { rmdir } from 'node:fs/promises'
 import { addPackageScripts, installDependencies, projectScripts } from './steps/deps.js'
+import { runDevServer } from './steps/devServer.js'
 import { applyOverlay, removeSuperseded } from './steps/overlay.js'
 import {
   type ExistingServerResult,
@@ -32,8 +33,14 @@ function messageOf(error: unknown): string {
 }
 
 async function logError(error: unknown): Promise<void> {
+  if (error instanceof CommandError) {
+    log.error(
+      `${error.message}\nMake a search key with this command, then run the CLI again with it:`,
+    )
+    await showCommand(error.command)
+    return
+  }
   log.error(messageOf(error))
-  if (error instanceof CommandError) await showCommand(error.command)
 }
 
 async function main(): Promise<number> {
@@ -206,6 +213,7 @@ async function main(): Promise<number> {
     await clearRunState(config.targetDir)
     note(nextStepsLines(config).join('\n'), 'Next')
     outro(`Done in ${config.projectName}.`)
+    if (!cli.yes) await runDevServer(config.projectName, config.targetDir, config.template)
     return 0
   }
 
@@ -256,6 +264,8 @@ async function main(): Promise<number> {
   note(nextStepsLines(config).join('\n'), 'Next')
 
   outro(`Done in ${config.projectName}. Type a misspelling and watch.`)
+  // With --yes, an agent or a script runs the CLI and starts the app itself.
+  if (!cli.yes) await runDevServer(config.projectName, config.targetDir, config.template)
   return 0
 }
 

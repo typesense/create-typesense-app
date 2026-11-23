@@ -91,19 +91,24 @@ export async function listSearchable(client: TypesenseClient): Promise<Listing> 
  */
 export function keyNeeds(): string {
   return (
-    'The browser gets this key, so it must only read and search. It needs these actions:\n' +
-    '`documents:search`, `collections:get`, `collections:list` and `aliases:list`. The\n' +
-    'search-only key in the Typesense Cloud dashboard has only `documents:search`, so it\n' +
-    'does not work here. To make the right key with your admin key, run:'
+    'Paste a search key for this server. The browser gets this key, so it may only search\n' +
+    'and read schemas: an admin key is refused. The search-only key in the Typesense Cloud\n' +
+    'dashboard does not work either, because it cannot read schemas. To make the right key,\n' +
+    'set TYPESENSE_ADMIN_API_KEY to your admin key, run this command, and paste the "value"\n' +
+    'from its reply:'
   )
 }
 
-/** Why the CLI cannot show the collections; `searchKeyCommand` makes the key that fixes it. */
+/** What to do after a refused key, when the CLI can ask again. */
+export const MAKE_KEY_AND_PASTE =
+  'Make a search key with this command, then paste the "value" from its reply:'
+
+/**
+ * Why the CLI cannot list the collections. Typesense answers a wrong key and a
+ * key without `collections:list` with the same 401, so name both.
+ */
 export function listRefusedMessage(): string {
-  return (
-    'The key may not list collections: it lacks the `collections:list` action. The CLI also\n' +
-    'needs `collections:get` to read each schema. A key made with this command has both:'
-  )
+  return 'Typesense refused this key. Either it is not a valid key, or it lacks the `collections:list` action.'
 }
 
 /** Listing keys needs `keys:*`, which a key for the browser must never have. */
@@ -203,26 +208,28 @@ export async function inspectExistingServer(
 
   if (await canManageKeys(client)) {
     throw new CommandError(
-      'That key can manage API keys, so it is an admin key or close to one, and the browser ' +
-        'would hold it. Create a search key and re-run with it:',
+      'That key can manage API keys, so it is an admin key or close to one. The browser gets ' +
+        'this key, so it must not be one.',
       searchKeyCommand(server.url, scope.length > 0 ? scope : ['*']),
     )
   }
   if (names.length === 0) {
     if (listing.listRefused) {
       throw new CommandError(
-        `Name the collections with --collections, or make a key that can list them.\n${listRefusedMessage()}`,
+        `${listRefusedMessage()} Name the collections with --collections, or use a key that can list them.`,
         searchKeyCommand(server.url, ['*']),
       )
     }
-    throw new Error(`${server.url} has no collections that the key can see.`)
+    throw new Error(
+      `${server.url} has no collections that the key can see. Create a collection with ` +
+        'documents, then run the CLI again.',
+    )
   }
 
   const writes = await writeAccess(client, scope)
   if (writes.length > 0) {
     throw new CommandError(
-      `That key can ${writes.join(', ')}, and the browser would hold it. ` +
-        'Create a search key and re-run with it:',
+      `That key can ${writes.join(', ')}. The browser gets this key, so it must not write.`,
       searchKeyCommand(server.url, scope),
     )
   }
@@ -236,14 +243,21 @@ async function inspectCollection(
   name: string,
   scope: string[],
 ): Promise<InspectedCollection> {
-  const schema = await client.getCollection(name).catch((error: unknown) => {
+  const schema = await client.getCollection(name).catch(async (error: unknown) => {
     if (error instanceof TypesenseError && error.status === 404) {
       throw new Error(`${url} has no collection or alias named "${name}".`, { cause: error })
     }
     if (refused(error)) {
+      // A wrong key and a missing `collections:get` both get 401. A search tells
+      // them apart: a valid key that may search the collection gets results.
+      const searches = await client.search(name, { q: '*', per_page: '1' }).then(
+        () => true,
+        () => false,
+      )
       throw new CommandError(
-        `The key may not read the schema of "${name}": it lacks the \`collections:get\` action.\n` +
-          'A key made with this command has every action the CLI needs:',
+        searches
+          ? `The key may not read the schema of "${name}": it lacks the \`collections:get\` action.`
+          : `Typesense refused this key for "${name}". Either it is not a valid key, or it has no access to "${name}".`,
         searchKeyCommand(url, scope),
         { cause: error },
       )
@@ -251,7 +265,14 @@ async function inspectCollection(
     throw error
   })
   // Inferred here, so a collection with nothing to search is refused before the scaffold.
-  const { hits } = await client.search(name, { q: '*', per_page: '10' })
+  const { hits } = await client.search(name, { q: '*', per_page: '10' }).catch((error: unknown) => {
+    if (!refused(error)) throw error
+    throw new CommandError(
+      `The key may not search "${name}": it lacks the \`documents:search\` action.`,
+      searchKeyCommand(url, scope),
+      { cause: error },
+    )
+  })
   const fields = mergeFields(schema.fields, fieldsFromDocuments(hits.map((hit) => hit.document)))
   return {
     name,

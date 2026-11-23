@@ -19,15 +19,17 @@ import {
   DEFAULT_PROJECT_NAME,
   STATE_FILE,
 } from './constants.js'
-import { splitNames, validateServerUrl } from './cli.js'
+import { validateServerUrl } from './cli.js'
 import { COMPOSE_FILE } from './steps/compose.js'
 import {
+  inspectExistingServer,
   keyNeeds,
   listRefusedMessage,
   listSearchable,
+  MAKE_KEY_AND_PASTE,
   searchKeyCommand,
 } from './steps/existingServer.js'
-import { showCommand } from './util/clipboard.js'
+import { CommandError, showCommand } from './util/clipboard.js'
 import type { SearchConfig, SearchField } from './steps/searchConfig.js'
 import { waitForHealth } from './steps/server.js'
 import { hasRunState } from './util/state.js'
@@ -210,32 +212,102 @@ async function askExistingServer(
     }),
   )
   const serverUrl = (url || fallback).trim().replace(/\/+$/, '')
+  return askUntilKeyWorks(serverUrl, kind, options, hint)
+}
 
+/**
+ * Asks for the search key until the run can use it, or the developer presses
+ * Ctrl+C. The key gets the same checks the run makes: the collection list, the
+ * schema and a search of each chosen collection, and the admin and write checks.
+ * A key from the environment is tried first, and asked for again if it fails.
+ */
+async function askUntilKeyWorks(
+  url: string,
+  flavour: 'existing' | 'cloud',
+  options: Pick<PromptOptions, 'apiKey' | 'collections'>,
+  hint?: string,
+): Promise<ServerConfig> {
   let apiKey = options.apiKey
   if (apiKey === undefined) {
     if (hint) log.info(hint)
-    else {
-      log.info(keyNeeds())
-      await showCommand(searchKeyCommand(serverUrl, ['*']))
-    }
-    apiKey = await askSearchKey()
+    log.info(keyNeeds())
+    await showCommand(searchKeyCommand(url, ['*']))
   }
 
-  const collections = options.collections ?? (await askCollections(serverUrl, apiKey))
-  return { kind: 'byo', flavour: kind, url: serverUrl, apiKey, collections }
+  for (;;) {
+    apiKey ??= await askSearchKey()
+    const checked = await checkKey(url, flavour, apiKey, options.collections)
+    if ('server' in checked) return checked.server
+    if ('empty' in checked) {
+      // The key works; a new key would not help. Keep it, and check again once
+      // the developer has made a collection.
+      log.warn(
+        `There are no collections on ${url} that this key can see. The search UI needs a\n` +
+          'collection with documents. Create one, for example in the Typesense Cloud dashboard.',
+      )
+      const next = unwrap(
+        await select({
+          message: 'When the collection exists:',
+          options: [
+            { value: 'again', label: 'Check again' },
+            { value: 'exit', label: 'Exit' },
+          ],
+        }),
+      )
+      if (next === 'exit') {
+        cancel('Nothing was written.')
+        process.exit(1)
+      }
+      continue
+    }
+    log.warn(`${checked.message}\n${MAKE_KEY_AND_PASTE}`)
+    await showCommand(checked.command)
+    apiKey = undefined
+  }
+}
+
+/**
+ * The server config for a key that works, or why it does not. A refusal is an
+ * answer, not an error; a server that does not answer still throws.
+ */
+async function checkKey(
+  url: string,
+  flavour: 'existing' | 'cloud',
+  apiKey: string,
+  named: string[] | undefined,
+): Promise<{ server: ServerConfig } | { empty: true } | { message: string; command: string }> {
+  // With --collections, the run does not need to list collections.
+  let collections = named
+  if (collections === undefined) {
+    const listing = await listSearchable(createTypesenseClient(url, apiKey))
+    if (listing.listRefused) {
+      return { message: listRefusedMessage(), command: searchKeyCommand(url, ['*']) }
+    }
+    if (listing.collections.length === 0 && listing.aliases.length === 0) return { empty: true }
+    collections = await pickCollections(listing.collections, listing.aliases)
+  }
+
+  const server: ServerConfig = { kind: 'byo', flavour, url, apiKey, collections }
+  try {
+    await inspectExistingServer(server)
+    return { server }
+  } catch (error) {
+    if (error instanceof CommandError) return { message: error.message, command: error.command }
+    throw error
+  }
 }
 
 /** The key prompt's check. The key is the one the browser gets. */
 export function validateSearchKey(value: string | undefined): string | undefined {
   return (value ?? '').trim() === ''
-    ? 'Required. An admin key is refused, because the browser gets this key.'
+    ? 'Paste a search key. To make one, run the curl command above.'
     : undefined
 }
 
 async function askSearchKey(): Promise<string> {
   return unwrap(
     await password({
-      message: 'Search key (documents:search, collections:get, collections:list)',
+      message: 'Search key (the "value" from the curl reply)',
       validate: validateSearchKey,
     }),
   ).trim()
@@ -277,30 +349,11 @@ export function emptySelections(
   return chosen.filter((name) => (count.get(target.get(name) ?? name) ?? 0) === 0)
 }
 
-/**
- * Lists the collections and aliases the key can see, with document counts; falls
- * back to typing names if it cannot list them.
- */
-async function askCollections(url: string, apiKey: string): Promise<string[]> {
-  const { collections, aliases, listRefused } = await listSearchable(
-    createTypesenseClient(url, apiKey),
-  )
-  if (!listRefused && collections.length === 0 && aliases.length === 0) {
-    throw new Error(`${url} has no collections that the key can see.`)
-  }
-  if (listRefused) {
-    log.warn(listRefusedMessage())
-    await showCommand(searchKeyCommand(url, ['*']))
-    const typed = unwrap(
-      await text({
-        message: 'Collections to search (comma-separated)',
-        validate: (value) =>
-          splitNames(value ?? '').length === 0 ? 'Name at least one collection.' : undefined,
-      }),
-    )
-    return splitNames(typed)
-  }
-
+/** Asks which of the listed collections and aliases to search, with document counts. */
+async function pickCollections(
+  collections: StoredCollection[],
+  aliases: StoredAlias[],
+): Promise<string[]> {
   const chosen = unwrap(
     await multiselect({
       message: 'Collections to search?',
@@ -489,14 +542,10 @@ export async function runPrompts(options: PromptOptions): Promise<ProjectConfig>
 
   const projectName = await askProjectName(options)
   const template = await askTemplate(options)
-  let server: ServerConfig
-  if (options.serverUrl === undefined) {
-    server = await askServer(options)
-  } else {
-    const apiKey = await askKeyIfMissing(options)
-    const collections = options.collections ?? (await askCollections(options.serverUrl, apiKey))
-    server = existingServerFromFlags({ ...options, collections }, apiKey)
-  }
+  const server =
+    options.serverUrl === undefined
+      ? await askServer(options)
+      : await askUntilKeyWorks(options.serverUrl, serverFlavour(options.serverUrl), options)
 
   return {
     projectName,
@@ -504,13 +553,6 @@ export async function runPrompts(options: PromptOptions): Promise<ProjectConfig>
     template,
     server,
   }
-}
-
-async function askKeyIfMissing(options: PromptOptions): Promise<string> {
-  if (options.apiKey !== undefined) return options.apiKey
-  log.info(keyNeeds())
-  await showCommand(searchKeyCommand(options.serverUrl ?? '', ['*']))
-  return askSearchKey()
 }
 
 /** A Typesense Cloud cluster is any host under typesense.net. */

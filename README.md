@@ -48,7 +48,8 @@ npx create-typesense-app@latest my-search-app --yes -t nextjs \
 - Without `--collections`, the CLI uses every collection and alias that the key can see.
 - If the key is an admin key, the CLI stops and prints the `curl` command that makes a search key.
 
-When the CLI finishes, run `cd my-search-app && npm run dev`.
+With `--yes`, the CLI does not start the dev server. When it finishes, run
+`cd my-search-app && npm run dev`.
 
 ## Try Typesense with sample data
 
@@ -63,14 +64,10 @@ can see typo tolerance on real titles.
 
 2. Enter a directory name and choose a framework.
 3. At **Typesense server?**, choose **Spin one up locally with Docker**.
-4. When the CLI finishes, start the dev server:
-
-   ```bash
-   cd my-search-app
-   npm run dev
-   ```
-
-5. Open the URL that the CLI prints, and type `hary potr`.
+4. When the CLI finishes, it starts the dev server and opens the page in your
+   browser. Type `hary potr`.
+5. To stop the dev server, press Ctrl+C. To start it again later, run
+   `cd my-search-app && npm run dev`.
 
 The page opens with the most-rated books. The misspelled query finds Harry
 Potter.
@@ -120,14 +117,18 @@ the server, and never creates, changes, or deletes anything there.
 
 3. At **Typesense server?**, choose **I already have one running** or
    **Typesense Cloud**.
-4. Enter the server URL and the search key. The key prompt hides what you type.
+4. Enter the server URL, then paste the search key. The key prompt hides what
+   you type.
 5. Select the collections and aliases to search. Each one shows its document
    count.
 6. Review the search config for each collection, or change it. The config says
    which fields the page searches, facets, and shows.
+7. The CLI starts the dev server and opens the page in your browser.
 
-The CLI refuses an admin key, and prints the `curl` command for your
-collections. To skip the key prompt, set `TYPESENSE_API_KEY` or pass
+The CLI checks the key before it writes anything. If the key is wrong, is an
+admin key, can write, or lacks an action, the CLI says why, prints the `curl`
+command that makes the right key, and asks for the key again. To stop, press
+Ctrl+C. To skip the key prompt, set `TYPESENSE_API_KEY` or pass
 `--api-key-stdin`.
 
 With one collection, the home page searches that collection, with its facets.
