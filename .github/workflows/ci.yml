@@ -1,0 +1,24 @@
+# The same checks the pre-push hook runs: Biome lint, typecheck, and the test
+# suite. The Docker integration tests run too: GitHub's runners have Docker.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build

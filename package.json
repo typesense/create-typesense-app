@@ -34,8 +34,12 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
-    "e2e": "node scripts/e2e.mjs"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check",
+    "e2e": "node scripts/e2e.mjs",
+    "lint": "biome check",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
@@ -43,7 +47,9 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^26.1.2",
+    "husky": "^9.1.7",
     "playwright": "^1.64.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
