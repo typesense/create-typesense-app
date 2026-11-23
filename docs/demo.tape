@@ -8,8 +8,8 @@
 #
 # This drives the interactive flow rather than --yes, because the framework picker
 # is the thing worth showing. The keypresses below assume the prompt order in
-# src/prompts.ts: name, framework, server, sample data. If that order changes,
-# this tape needs changing with it.
+# src/prompts.ts for a local server: name, framework, server. If that order
+# changes, this tape needs changing with it.
 
 Output docs/demo.gif
 
@@ -18,7 +18,9 @@ Require docker
 Set Shell "bash"
 Set FontSize 16
 Set Width 1200
-Set Height 1000
+# Tall enough that the whole run fits without scrolling: once the window
+# scrolls, vhs can no longer read the screen, and the Wait below never matches.
+Set Height 1150
 Set Padding 20
 Set TypingSpeed 55ms
 Set WindowBar Colorful
@@ -35,12 +37,17 @@ Type "npx create-typesense-app@latest"
 Sleep 800ms
 Enter
 
+# Each answer waits for its question: a key sent before the prompt listens is
+# lost, and the take then hangs at that prompt.
+
 # Project name: accept the default.
-Sleep 2s
+Wait+Screen@60s /Project name/
+Sleep 1.2s
 Enter
 
 # Framework: pause long enough to read the list, move through it to show the
 # choice is real, then come back to the recommended one.
+Wait+Screen@30s /Framework\?/
 Sleep 2.2s
 Down
 Sleep 600ms
@@ -53,16 +60,13 @@ Sleep 900ms
 Enter
 
 # Typesense server: local Docker is preselected.
+Wait+Screen@30s /Typesense server\?/
 Sleep 1.5s
 Enter
 
-# Sample data: the books dataset is preselected.
-Sleep 1.3s
-Enter
-
 # Scaffold, install, start the server, download the dataset, index, verify.
-# The prompts above take about 9s, and the run itself about 25s with a warm image
-# but a cold dataset cache. Too short a wait here truncates the GIF just before
-# the payoff, which is exactly what happened the first time.
-Sleep 32s
-Sleep 2s
+# record-demo.sh warms the npm cache and the Docker image first, so this takes
+# about 15s. Wait for the last line rather than sleeping a guessed time: a fixed
+# sleep that is too short cuts the GIF just before the payoff.
+Wait+Screen@180s /Done in my-search-app/
+Sleep 4s

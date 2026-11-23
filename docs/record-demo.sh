@@ -14,17 +14,27 @@ cd "$repo"
 command -v vhs >/dev/null || { echo "vhs is not installed: brew install vhs"; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Docker is not running."; exit 1; }
 
-echo "==> Clearing anything holding port 8108"
-docker ps -aq --filter ancestor=typesense/typesense:30.2 |
-  while read -r id; do docker rm -f "$id" >/dev/null; done
-docker volume ls -q --filter name=typesense-data |
-  while read -r v; do docker volume rm "$v" >/dev/null 2>&1 || true; done
+# Another Typesense on 8108 makes the CLI ask whether to reuse it, which is not
+# the flow the GIF shows. Stop rather than guess whose server it is.
+if (exec 3<>/dev/tcp/127.0.0.1/8108) 2>/dev/null; then
+  echo "Port 8108 is in use. Stop whatever holds it, then run this again:"
+  echo "  lsof -nP -iTCP:8108 -sTCP:LISTEN"
+  exit 1
+fi
 
 echo "==> Warming the image so the GIF is not a download progress bar"
 docker pull --quiet typesense/typesense:30.2 >/dev/null
 
 echo "==> Building"
 npm run build >/dev/null
+
+# A first run spends minutes in npm installing the Next.js starter. One throwaway
+# run fills the npm cache, so the recorded run takes seconds.
+echo "==> Warming the npm cache with a throwaway run"
+warm="$(mktemp -d)"
+(cd "$warm" && node "$repo/dist/index.js" warm-up --yes >/dev/null 2>&1)
+(cd "$warm/warm-up" && docker compose down --volumes >/dev/null 2>&1) || true
+rm -rf "$warm"
 
 # --- BEFORE PUBLISH ---------------------------------------------------------
 # The GIF shows `npx create-typesense-app@latest`, which is what people will type.
@@ -55,17 +65,23 @@ export PATH="$shim:$PATH"
 # A short, fixed path: mktemp -d on macOS produces
 # /private/var/folders/kb/qh_tw84.../T/tmp.XXXX, which is noise in the recording.
 CTA_DEMO_DIR="/tmp/cta-demo"
-rm -rf "$CTA_DEMO_DIR"
-mkdir -p "$CTA_DEMO_DIR"
 export CTA_DEMO_DIR
+
+# Removes only what this script started: the demo project's own containers,
+# volume and directory. Runs before the take, and on every exit, so a failed
+# take does not leave a server on 8108.
+remove_demo() {
+  if [ -d "$CTA_DEMO_DIR/my-search-app" ]; then
+    (cd "$CTA_DEMO_DIR/my-search-app" && docker compose down --volumes >/dev/null 2>&1) || true
+  fi
+  rm -rf "$CTA_DEMO_DIR"
+}
+trap 'remove_demo; rm -rf "$shim"' EXIT
+
+remove_demo
+mkdir -p "$CTA_DEMO_DIR"
 echo "==> Recording in $CTA_DEMO_DIR"
 
 vhs docs/demo.tape
-
-echo "==> Tearing down what the demo started"
-if [ -d "$CTA_DEMO_DIR/my-search-app" ]; then
-  (cd "$CTA_DEMO_DIR/my-search-app" && docker compose down --volumes >/dev/null 2>&1) || true
-fi
-rm -rf "$CTA_DEMO_DIR" "$shim"
 
 echo "==> Done: $(du -h docs/demo.gif | cut -f1) at docs/demo.gif"
