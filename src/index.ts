@@ -71,7 +71,7 @@ async function main(): Promise<number> {
 
   intro(pc.bgCyan(pc.black(' create-typesense-app ')))
 
-  // Detect Docker up front (PLAN.md §7) — in parallel with loading manifests,
+  // Detect Docker up front — in parallel with loading manifests,
   // since the daemon probe is the slow one.
   const [templates, docker] = await Promise.all([loadTemplates(), checkDocker()])
 

@@ -11,7 +11,6 @@ import {
   select,
   text,
 } from '@clack/prompts'
-import pc from 'picocolors'
 import {
   ADMIN_KEY_VAR,
   DEFAULT_PORT,
@@ -79,7 +78,7 @@ export function validateProjectName(value: string): string | undefined {
 
 /**
  * Files a previous run of this CLI leaves behind. A directory containing only
- * these is a resumed run (PLAN.md §7), not a collision — otherwise every failed
+ * these is a resumed run, not a collision — otherwise every failed
  * run would need a manual `rm -rf` before retrying.
  *
  * Env files are matched by pattern because the name is the template's choice.
@@ -95,7 +94,7 @@ export function validateTargetDir(dir: string): string | undefined {
   if (!statSync(dir).isDirectory()) return `${dir} already exists and is not a directory.`
 
   // A run that crashed part-way left its marker: resuming is exactly what should
-  // happen, whatever else is in there (PLAN.md §7). This is the precise signal —
+  // happen, whatever else is in there. This is the precise signal —
   // the filename matching below is only a fallback for a run that failed before
   // the marker could be written.
   if (hasRunState(dir)) return undefined
@@ -177,7 +176,7 @@ async function askServer(options: PromptOptions): Promise<ServerConfig> {
 
   if (kind === 'docker') {
     if (!options.docker.available) {
-      // Don't hard-fail; the existing server paths are still open (PLAN.md §7).
+      // Don't hard-fail; the existing server paths are still open.
       log.warn(
         `Docker is unavailable: ${options.docker.reason}\n` +
           'Pick "I already have one running" or "Typesense Cloud" instead.',
@@ -537,7 +536,7 @@ export async function settleLocalServer(
 export async function runPrompts(options: PromptOptions): Promise<ProjectConfig> {
   if (!options.docker.available) {
     log.warn(`Docker not usable: ${options.docker.reason}`)
-    log.info(`You can still point at an existing server. ${pc.dim('(PLAN.md §7)')}`)
+    log.info('You can still use a Typesense server that you already run.')
   }
 
   const projectName = await askProjectName(options)

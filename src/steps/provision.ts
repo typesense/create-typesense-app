@@ -17,7 +17,7 @@ import { createTypesenseClient, TypesenseError } from '../util/typesense.js'
 export interface ProvisionOptions {
   /** Progress callback, so the CLI can render a step per stage. */
   onStep?: (message: string) => void
-  /** Health-poll tuning. Defaults to the 60s budget from PLAN.md §7. */
+  /** Health-poll tuning. Defaults to a 60s budget. */
   health?: WaitForHealthOptions
 }
 
@@ -64,7 +64,7 @@ async function assertAcceptsAdminKey(
  * Brings the local Typesense server up and does not return until it is healthy.
  * An existing server never comes here: the CLI only reads from it.
  *
- * Idempotent by design (PLAN.md §7): an admin key from an earlier run is reused,
+ * Idempotent by design: an admin key from an earlier run is reused,
  * the compose file is rewritten identically, and `compose up` on an already
  * running project is a no-op. Nothing here knows about a framework — the only
  * template input is the env file's name and prefix.

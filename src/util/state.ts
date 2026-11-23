@@ -4,7 +4,7 @@ import path from 'node:path'
 import { STATE_FILE } from '../constants.js'
 
 /**
- * Marks a run as in progress so a failed run can be resumed (PLAN.md §7).
+ * Marks a run as in progress so a failed run can be resumed.
  *
  * This is what lets the empty-directory check tell "we started here and crashed"
  * apart from "someone else's project lives here" — a distinction that filename

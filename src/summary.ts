@@ -89,8 +89,9 @@ export function nextStepsLines(config: ProjectConfig): string[] {
 }
 
 /**
- * Guard rail for the hard rule in CLAUDE.md, enforced at runtime as well as in
- * tests: nothing on the browser-visible list may also be on the secret list.
+ * Guard rail for the hard rule that the admin key never reaches the browser,
+ * enforced at runtime as well as in tests: nothing on the browser-visible list
+ * may also be on the secret list.
  */
 export function assertAdminKeyNeverPublic(publicPrefix: string): void {
   const offenders = PUBLIC_ENV_VARS.filter((name) =>

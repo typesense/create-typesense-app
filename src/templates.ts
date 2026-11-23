@@ -84,9 +84,8 @@ export class TemplateManifestError extends Error {
 
 /**
  * Every key the contract currently defines. Unknown keys are rejected rather
- * than ignored: a typo'd field would otherwise fail silently, and PLAN.md §5
- * expects the contract to grow explicitly (add the field here, then document it
- * in templates/README.md).
+ * than ignored: a typo'd field would otherwise fail silently. The contract grows
+ * explicitly: add the field here, then document it in templates/README.md.
  */
 const MANIFEST_KEYS = [
   'id',

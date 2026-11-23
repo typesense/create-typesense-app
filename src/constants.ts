@@ -6,12 +6,12 @@
 
 export const DEFAULT_PROJECT_NAME = 'my-search-app'
 
-/** Pinned deliberately — see PLAN.md §9. v30 reshaped synonyms and curation. */
+/** Pinned deliberately: a new major can change the API, as v30 did for synonyms and curation. */
 export const TYPESENSE_IMAGE = 'typesense/typesense:30.2'
 
 export const DEFAULT_PORT = 8108
 
-/** v1 is single-collection by design (PLAN.md §2). */
+/** The collection a local server creates for the books sample. */
 export const COLLECTION_NAME = 'books'
 
 /**
@@ -39,7 +39,7 @@ export const DATASET_APPROX_COUNT = '~10k'
 export const DEMO_QUERY_BY = 'title,authors'
 
 /**
- * The one facet the demo UI shows (PLAN.md §6).
+ * The one facet the books demo shows.
  *
  * `authors` rather than genres: the official dataset carries no genre field, and
  * inventing one would mean fabricating metadata for real books.
@@ -49,7 +49,7 @@ export const DEMO_FACET_BY = 'authors'
 /** The misspelling the whole project is built to answer. */
 export const TYPO_DEMO_QUERY = 'hary potr'
 
-/** Written to the project dir to make re-runs resumable (PLAN.md §7). */
+/** Written to the project dir to make re-runs resumable. */
 export const STATE_FILE = '.create-typesense-app.json'
 
 // --- Env variable names -----------------------------------------------------

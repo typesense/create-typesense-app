@@ -94,7 +94,7 @@ export async function addPackageScripts(
 }
 
 /**
- * Scripts added alongside the framework's own (PLAN.md §6).
+ * Scripts added alongside the framework's own.
  *
  * The two docker commands are framework-agnostic and need no flags, because the
  * generated compose file uses no variable substitution. Only the seed runner is

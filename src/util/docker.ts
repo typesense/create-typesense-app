@@ -8,7 +8,7 @@ export type DockerStatus =
 const PROBE_TIMEOUT_MS = 8_000
 
 /**
- * Detect Docker up front (PLAN.md §7). Read-only: this never starts anything.
+ * Detect Docker up front. Read-only: this never starts anything.
  *
  * Two probes, because they fail for different reasons and the user needs to know
  * which: `docker compose version` proves the CLI and the compose plugin exist,
