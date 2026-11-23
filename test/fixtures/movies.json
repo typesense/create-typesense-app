@@ -1,0 +1,62 @@
+{
+  "schema": {
+    "name": "movies",
+    "fields": [
+      { "name": "name", "type": "string" },
+      { "name": "director", "type": "string", "facet": true },
+      { "name": "genres", "type": "string[]", "facet": true },
+      { "name": "year", "type": "int32" }
+    ],
+    "default_sorting_field": "year"
+  },
+  "documents": [
+    {
+      "name": "Oppenheimer",
+      "director": "Christopher Nolan",
+      "genres": ["Drama", "History"],
+      "year": 2023
+    },
+    {
+      "name": "Parasite",
+      "director": "Bong Joon-ho",
+      "genres": ["Thriller", "Drama"],
+      "year": 2019
+    },
+    {
+      "name": "Interstellar",
+      "director": "Christopher Nolan",
+      "genres": ["Sci-Fi", "Drama"],
+      "year": 2014
+    },
+    {
+      "name": "Pan's Labyrinth",
+      "director": "Guillermo del Toro",
+      "genres": ["Fantasy", "War"],
+      "year": 2006
+    },
+    {
+      "name": "Spirited Away",
+      "director": "Hayao Miyazaki",
+      "genres": ["Animation", "Fantasy"],
+      "year": 2001
+    },
+    {
+      "name": "Amelie",
+      "director": "Jean-Pierre Jeunet",
+      "genres": ["Comedy", "Romance"],
+      "year": 2001
+    },
+    {
+      "name": "Pulp Fiction",
+      "director": "Quentin Tarantino",
+      "genres": ["Crime", "Drama"],
+      "year": 1994
+    },
+    {
+      "name": "The Godfather",
+      "director": "Francis Ford Coppola",
+      "genres": ["Crime", "Drama"],
+      "year": 1972
+    }
+  ]
+}
