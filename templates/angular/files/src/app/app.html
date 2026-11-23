@@ -1,0 +1,127 @@
+<div class="page">
+  <header class="topbar">
+    <a href="https://typesense.org" aria-label="Typesense">
+      <img class="logo" src="typesense-logo.svg" alt="Typesense" />
+    </a>
+    <nav class="nav">
+      <a href="https://typesense.org/docs/">docs</a>
+      <a href="https://github.com/typesense/typesense">github</a>
+      <a href="https://cloud.typesense.org">cloud</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    <div class="header">
+      <h1 class="heading">{{ title }}</h1>
+      <p class="subheading">Misspell it on purpose. Typesense corrects typos as you type.</p>
+    </div>
+
+    <input
+      type="search"
+      class="input"
+      [placeholder]="title"
+      [value]="query()"
+      (input)="onInput($event)"
+    />
+
+    @if (error(); as message) {
+      <p role="alert" class="error">
+        Search failed: {{ message }} Check the field names in typesense.config.json.
+      </p>
+    }
+
+    @if (page.collection; as collection) {
+      @if (page.showBack) {
+        <a href="./" class="link back">← All collections</a>
+      }
+      <div [class.layout]="collection.search.facets.length > 0">
+        @if (collection.search.facets.length > 0) {
+          <aside class="sidebar">
+            @for (field of collection.search.facets; track field) {
+              <section>
+                <h2 class="facet-heading">{{ label(field) }}</h2>
+                <div class="facet-search">
+                  <input
+                    type="search"
+                    [placeholder]="'Filter ' + label(field).toLowerCase()"
+                    (input)="facets()[field]?.searchForItems($any($event.target).value)"
+                  />
+                </div>
+                <ul class="facet-list">
+                  @for (item of facets()[field]?.items ?? []; track item.value) {
+                    <li>
+                      <label class="facet-label">
+                        <input
+                          type="checkbox"
+                          class="facet-checkbox"
+                          [checked]="item.isRefined"
+                          (change)="facets()[field]?.refine(item.value)"
+                        />
+                        {{ item.label }}
+                        <span class="facet-count">{{ item.count }}</span>
+                      </label>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+          </aside>
+        }
+
+        <section>
+          <p class="stats">{{ stats() }}</p>
+          <ol class="hit-list">
+            @for (hit of hits(); track hit.objectID) {
+              <li><ng-container *ngTemplateOutlet="hitTemplate; context: { hit, search: collection.search }" /></li>
+            }
+          </ol>
+        </section>
+      </div>
+    } @else {
+      @for (collection of collections; track collection.name) {
+        <section class="section">
+          <div class="section-header">
+            <h2 class="section-title">{{ collection.name }}</h2>
+            <a href="{{ showAll(collection.name) }}" class="link">Show all in {{ collection.name }}</a>
+          </div>
+          @if (sections()[collection.name]; as hits) {
+            @if (hits.length === 0) {
+              <p class="empty">No results in {{ collection.name }}.</p>
+            } @else {
+              <ol class="hit-list">
+                @for (hit of hits; track hit.objectID) {
+                  <li><ng-container *ngTemplateOutlet="hitTemplate; context: { hit, search: collection.search }" /></li>
+                }
+              </ol>
+            }
+          }
+        </section>
+      }
+    }
+  </main>
+</div>
+
+<ng-template #hitTemplate let-hit="hit" let-search="search">
+  <article class="hit">
+    @if (image(hit, search); as src) {
+      <img class="cover" [src]="src" alt="" loading="lazy" (error)="hide($event)" />
+    }
+    <div class="hit-body">
+      <h2 class="title">
+        @if (highlighted(hit, search); as html) {
+          <span [innerHTML]="html"></span>
+        } @else {
+          {{ format(hit[search.title]) }}
+        }
+      </h2>
+      <dl class="fields">
+        @for (detail of details(hit, search); track detail[0]) {
+          <div class="field">
+            <dt>{{ label(detail[0]) }}</dt>
+            <dd>{{ detail[1] }}</dd>
+          </div>
+        }
+      </dl>
+    </div>
+  </article>
+</ng-template>

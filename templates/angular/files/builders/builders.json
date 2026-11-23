@@ -1,0 +1,14 @@
+{
+  "builders": {
+    "application": {
+      "implementation": "./application.js",
+      "schema": "./application.schema.json",
+      "description": "@angular/build:application, with the NG_APP_ variables from .env"
+    },
+    "dev-server": {
+      "implementation": "./dev-server.js",
+      "schema": "./dev-server.schema.json",
+      "description": "@angular/build:dev-server, with the NG_APP_ variables from .env"
+    }
+  }
+}

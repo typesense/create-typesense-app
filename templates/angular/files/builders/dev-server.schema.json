@@ -1,0 +1,18 @@
+{
+  "$comment": "Permissive on purpose: the wrapped Angular builder validates the options against its own schema. Only the flags listed here are accepted on the command line.",
+  "type": "object",
+  "properties": {
+    "buildTarget": {
+      "type": "string"
+    },
+    "port": {
+      "type": "number"
+    },
+    "host": {
+      "type": "string"
+    },
+    "open": {
+      "type": "boolean"
+    }
+  }
+}
