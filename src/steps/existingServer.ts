@@ -17,9 +17,16 @@ import {
   type SearchConfig,
   type SearchField,
 } from './searchConfig.js'
+import { mapWithLimit } from '../util/limit.js'
 import { waitForHealth } from './server.js'
 
 type ExistingServer = Extract<ServerConfig, { kind: 'byo' }>
+
+/** Requests the CLI sends to an existing server at the same time, at most. */
+const PARALLEL_REQUESTS = 8
+
+/** With --yes and no --collections, the most collections the CLI takes on its own. */
+const MAX_COLLECTIONS_WITHOUT_NAMES = 20
 
 export function readOnlyNotice(url: string): string {
   return `Read-only: this CLI reads schemas and documents from ${url} and does not create, change or delete anything on it.`
@@ -154,11 +161,13 @@ export async function writeAccess(
     ['POST', '/collections', 'probe', 'create collections'],
     ...collections.flatMap(writeProbes),
   ]
-  const allowed = await Promise.all(
-    probes.map(async ([method, path, body, action]) => {
+  const allowed = await mapWithLimit(
+    probes,
+    PARALLEL_REQUESTS,
+    async ([method, path, body, action]) => {
       const status = await client.status(method, path, body)
       return status === 401 || status === 403 ? undefined : action
-    }),
+    },
   )
   return [...new Set(allowed.filter((action) => action !== undefined))]
 }
@@ -225,6 +234,14 @@ export async function inspectExistingServer(
         'documents, then run the CLI again.',
     )
   }
+  // Without --collections, --yes takes every collection, and each one gets a
+  // section on the page. Past a handful, that is a page nobody can use.
+  if (server.collections.length === 0 && names.length > MAX_COLLECTIONS_WITHOUT_NAMES) {
+    throw new Error(
+      `The key can see ${names.length} collections and aliases on ${server.url}. Name the ones ` +
+        `to search with --collections, for example --collections ${names.slice(0, 2).join(',')}.`,
+    )
+  }
 
   const writes = await writeAccess(client, scope)
   if (writes.length > 0) {
@@ -234,7 +251,9 @@ export async function inspectExistingServer(
     )
   }
 
-  return Promise.all(names.map((name) => inspectCollection(client, server.url, name, scope)))
+  return mapWithLimit(names, PARALLEL_REQUESTS, (name) =>
+    inspectCollection(client, server.url, name, scope),
+  )
 }
 
 async function inspectCollection(
@@ -309,10 +328,8 @@ export async function setUpExistingServer(
   onStep(`Wrote ${template.env.file}`)
 
   const client = createTypesenseClient(server.url, server.apiKey)
-  return Promise.all(
-    inspected.map(async ({ name, search }) => {
-      const { found } = await client.search(name, { q: '*', query_by: search.queryBy.join(',') })
-      return { collection: name, found }
-    }),
-  )
+  return mapWithLimit(inspected, PARALLEL_REQUESTS, async ({ name, search }) => {
+    const { found } = await client.search(name, { q: '*', query_by: search.queryBy.join(',') })
+    return { collection: name, found }
+  })
 }
