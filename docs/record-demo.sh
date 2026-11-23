@@ -36,6 +36,10 @@ warm="$(mktemp -d)"
 (cd "$warm/warm-up" && docker compose down --volumes >/dev/null 2>&1) || true
 rm -rf "$warm"
 
+# Commands that the recorded run finds first on PATH.
+shim="$(mktemp -d)"
+export PATH="$shim:$PATH"
+
 # --- BEFORE PUBLISH ---------------------------------------------------------
 # The GIF shows `npx create-typesense-app@latest`, which is what people will type.
 # Until the package is on npm, that cannot resolve, so this shim makes it run the
@@ -47,7 +51,6 @@ rm -rf "$warm"
 # `npx --yes create-next-app@latest` to scaffold, and an unconditional shim
 # swallows that too, sending create-next-app's flags back into this CLI.
 real_npx="$(command -v npx)"
-shim="$(mktemp -d)"
 cat > "$shim/npx" <<SHIM
 #!/bin/sh
 case "\$1" in
@@ -59,8 +62,29 @@ esac
 exec "$real_npx" "\$@"
 SHIM
 chmod +x "$shim/npx"
-export PATH="$shim:$PATH"
 # --- end BEFORE PUBLISH -----------------------------------------------------
+
+# After the run, the CLI opens the app in the browser. These stand-ins keep a
+# browser window from opening on the recording machine; the GIF shows only the
+# terminal anyway.
+for opener in open xdg-open; do
+  printf '#!/bin/sh\nexit 0\n' > "$shim/$opener"
+  chmod +x "$shim/$opener"
+done
+
+# The dev server prints a Network: line with this machine's LAN address. Hide
+# the machine's network interfaces from every Node process in the recording, so
+# that the address does not end up in a public GIF. Next.js then prints only
+# the Local: line.
+cat > "$shim/hide-network.cjs" <<'PRELOAD'
+const os = require('node:os')
+const all = os.networkInterfaces
+os.networkInterfaces = () =>
+  Object.fromEntries(
+    Object.entries(all()).map(([name, addresses]) => [name, addresses.filter((a) => a.internal)]),
+  )
+PRELOAD
+export NODE_OPTIONS="--require $shim/hide-network.cjs"
 
 # A short, fixed path: mktemp -d on macOS produces
 # /private/var/folders/kb/qh_tw84.../T/tmp.XXXX, which is noise in the recording.

@@ -6,7 +6,7 @@ The fastest way to try Typesense: a working search UI on your data, in your fram
 npx create-typesense-app@latest my-search-app --yes
 ```
 
-![Choosing a framework at the prompt, then the server starting, 9979 books being indexed, and "hary potr" finding Harry Potter](https://raw.githubusercontent.com/typesense/create-typesense-app/master/docs/demo.gif)
+![Choosing a framework at the prompt, then the server starting, 9979 books being indexed, "hary potr" finding Harry Potter, and the dev server starting](https://raw.githubusercontent.com/typesense/create-typesense-app/master/docs/demo.gif)
 
 The generated app, searching the misspelled "hary potr":
 

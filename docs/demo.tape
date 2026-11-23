@@ -20,7 +20,7 @@ Set FontSize 16
 Set Width 1200
 # Tall enough that the whole run fits without scrolling: once the window
 # scrolls, vhs can no longer read the screen, and the Wait below never matches.
-Set Height 1150
+Set Height 1450
 Set Padding 20
 Set TypingSpeed 55ms
 Set WindowBar Colorful
@@ -69,4 +69,11 @@ Enter
 # about 15s. Wait for the last line rather than sleeping a guessed time: a fixed
 # sleep that is too short cuts the GIF just before the payoff.
 Wait+Screen@180s /Done in my-search-app/
-Sleep 4s
+
+# The CLI then starts the dev server and opens the browser. record-demo.sh puts
+# a stand-in for `open` on PATH, so no browser opens on the recording machine.
+Wait+Screen@60s /Ready in/
+Sleep 3s
+Ctrl+C
+Wait+Screen@30s /dev server stopped/
+Sleep 3s
