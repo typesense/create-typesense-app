@@ -8,7 +8,7 @@ export type DockerStatus =
 const PROBE_TIMEOUT_MS = 8_000
 
 /**
- * Detect Docker up front (PLAN.md §7). Read-only: this never starts anything.
+ * Detect Docker up front. Read-only: this never starts anything.
  *
  * Two probes, because they fail for different reasons and the user needs to know
  * which: `docker compose version` proves the CLI and the compose plugin exist,
@@ -57,21 +57,19 @@ export async function checkDocker(): Promise<DockerStatus> {
  */
 export async function runCompose(projectDir: string, args: string[]): Promise<string> {
   try {
-    const result = await execa(
-      'docker',
-      ['compose', '--project-directory', projectDir, ...args],
-      { cwd: projectDir, timeout: 300_000 },
-    )
+    const result = await execa('docker', ['compose', '--project-directory', projectDir, ...args], {
+      cwd: projectDir,
+      timeout: 300_000,
+    })
     return result.stdout
   } catch (error) {
     const stderr =
       typeof error === 'object' && error !== null && 'stderr' in error
         ? String((error as { stderr?: unknown }).stderr ?? '').trim()
         : ''
-    throw new Error(
-      `\`docker compose ${args.join(' ')}\` failed${stderr ? `:\n${stderr}` : '.'}`,
-      { cause: error },
-    )
+    throw new Error(`\`docker compose ${args.join(' ')}\` failed${stderr ? `:\n${stderr}` : '.'}`, {
+      cause: error,
+    })
   }
 }
 
@@ -112,11 +110,12 @@ export async function composePull(
   projectDir: string,
   onLine: (line: string) => void = () => {},
 ): Promise<void> {
-  const subprocess = execa(
-    'docker',
-    ['compose', '--project-directory', projectDir, 'pull'],
-    { cwd: projectDir, timeout: 900_000, all: true, buffer: false },
-  )
+  const subprocess = execa('docker', ['compose', '--project-directory', projectDir, 'pull'], {
+    cwd: projectDir,
+    timeout: 900_000,
+    all: true,
+    buffer: false,
+  })
 
   for await (const line of subprocess.iterable({ from: 'all' })) {
     onLine(String(line))

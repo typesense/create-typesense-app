@@ -27,10 +27,11 @@ const UNIT_BYTES: Record<string, number> = {
 }
 
 export function humanBytes(bytes: number): string {
-  if (bytes >= UNIT_BYTES['GB']!) {
-    return `${(bytes / UNIT_BYTES['GB']!).toFixed(1)} GB`
+  const { GB = 1e9, MB = 1e6 } = UNIT_BYTES
+  if (bytes >= GB) {
+    return `${(bytes / GB).toFixed(1)} GB`
   }
-  return `${Math.round(bytes / UNIT_BYTES['MB']!)} MB`
+  return `${Math.round(bytes / MB)} MB`
 }
 
 function parseSize(raw: string): number {

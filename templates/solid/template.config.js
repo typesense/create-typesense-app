@@ -27,8 +27,9 @@ export default {
 
   files: 'files/',
   // The Solid starter is a landing page. Our App replaces it, which would
-  // otherwise leave its artwork behind as unreferenced files.
-  remove: ['src/assets', 'public/icons.svg'],
+  // otherwise leave its artwork behind as unreferenced files. favicon.svg goes
+  // because index.html points at the overlay's Typesense favicon.png.
+  remove: ['src/assets', 'public/icons.svg', 'public/favicon.svg'],
 
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:5173',

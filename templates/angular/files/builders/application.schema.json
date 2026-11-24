@@ -1,0 +1,9 @@
+{
+  "$comment": "Permissive on purpose: the wrapped Angular builder validates the options against its own schema. Only the flags listed here are accepted on the command line.",
+  "type": "object",
+  "properties": {
+    "watch": {
+      "type": "boolean"
+    }
+  }
+}

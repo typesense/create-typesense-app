@@ -29,7 +29,8 @@ export default {
   files: 'files/',
   // The Vite starter is a landing page. Our entry point replaces it, which would
   // otherwise leave its counter and artwork behind as unreferenced files.
-  remove: ['src/counter.js', 'src/assets', 'public/icons.svg'],
+  // public/favicon.svg goes because index.html now points at the overlay's favicon.png.
+  remove: ['src/counter.js', 'src/assets', 'public/icons.svg', 'public/favicon.svg'],
 
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:5173',

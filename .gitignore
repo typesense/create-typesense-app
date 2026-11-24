@@ -12,3 +12,4 @@ dist/
 # Local working docs — the spec and the agent instructions stay out of the repo.
 /CLAUDE.md
 /PLAN.md
+/docs/adr/

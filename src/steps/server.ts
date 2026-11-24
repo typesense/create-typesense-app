@@ -36,7 +36,11 @@ export async function waitForHealth(
       const body = await response.text()
       try {
         const parsed: unknown = JSON.parse(body)
-        if (typeof parsed === 'object' && parsed !== null && (parsed as { ok?: unknown }).ok === true) {
+        if (
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          (parsed as { ok?: unknown }).ok === true
+        ) {
           return
         }
         lastAttempt = `HTTP ${response.status}, body ${body.slice(0, 120)}`
@@ -69,15 +73,16 @@ export async function waitForHealth(
  * diagnosis.
  */
 export function describeStartFailure(stderr: string, port: number): string {
-  const clash =
-    /port is already allocated|address already in use|ports are not available/i.test(stderr)
+  const clash = /port is already allocated|address already in use|ports are not available/i.test(
+    stderr,
+  )
   if (!clash) return stderr
 
   return (
     `Port ${port} is already in use, so Typesense could not start.\n` +
     `  Something is bound to it — most likely a Typesense you already have running.\n` +
     `  Either use another port:   --port ${port + 1}\n` +
-    "  or point at the existing server instead of starting one (drop --yes and pick\n" +
+    '  or point at the existing server instead of starting one (drop --yes and pick\n' +
     '  "I already have one running").\n\n' +
     `Docker said:\n${stderr}`
   )

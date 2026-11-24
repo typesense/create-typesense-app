@@ -1,5 +1,8 @@
 export interface TypesenseClient {
   collectionExists(name: string): Promise<boolean>
+  getCollection(name: string): Promise<StoredCollection>
+  listCollections(): Promise<StoredCollection[]>
+  listAliases(): Promise<StoredAlias[]>
   createCollection(schema: object): Promise<void>
   deleteCollection(name: string): Promise<void>
   importDocuments(name: string, jsonl: string): Promise<string>
@@ -19,6 +22,18 @@ export interface CreatedKey {
   id: number
   /** Returned in full only at creation time — Typesense never shows it again. */
   value: string
+}
+
+export interface StoredCollection {
+  name: string
+  num_documents: number
+  fields: { name: string; type: string; facet?: boolean; optional?: boolean; index?: boolean }[]
+  default_sorting_field?: string
+}
+
+export interface StoredAlias {
+  name: string
+  collection_name: string
 }
 
 export interface StoredKey {
@@ -104,6 +119,19 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
         allow404: true,
       })
       return status === 200
+    },
+
+    async getCollection(name) {
+      return requestJson<StoredCollection>('GET', `/collections/${encodeURIComponent(name)}`)
+    },
+
+    async listCollections() {
+      return requestJson<StoredCollection[]>('GET', '/collections')
+    },
+
+    async listAliases() {
+      const { aliases } = await requestJson<{ aliases?: StoredAlias[] }>('GET', '/aliases')
+      return aliases ?? []
     },
 
     async createCollection(schema) {

@@ -102,7 +102,7 @@ export async function ensureDataset(
     throw new Error(
       `Could not download the sample dataset from ${url}\n` +
         `  ${error instanceof Error ? error.message : String(error)}\n` +
-        'Re-run with --dataset empty to skip it, or download it manually into ' +
+        'Check the network and re-run, or download it manually into ' +
         `data/${DATASET_FILE}.`,
     )
   }
@@ -110,7 +110,7 @@ export async function ensureDataset(
   if (!response.ok) {
     throw new Error(
       `Could not download the sample dataset: ${url} replied ${response.status}.\n` +
-        'Re-run with --dataset empty to skip it.',
+        'Check the network and re-run.',
     )
   }
 

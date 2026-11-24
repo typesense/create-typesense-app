@@ -1,10 +1,18 @@
 {
   "name": "create-typesense-app",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Scaffold a working Typesense search-as-you-type app in one command — server, schema, sample data, and a browser-safe search-only API key.",
   "type": "module",
   "license": "MIT",
   "author": "Nikhil Adiga <nikhiladigaz@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/typesense/create-typesense-app.git"
+  },
+  "homepage": "https://github.com/typesense/create-typesense-app#readme",
+  "bugs": {
+    "url": "https://github.com/typesense/create-typesense-app/issues"
+  },
   "bin": {
     "create-typesense-app": "dist/index.js"
   },
@@ -26,7 +34,19 @@
     "create-app",
     "starter",
     "nextjs",
-    "cli"
+    "cli",
+    "qwik",
+    "solidjs",
+    "vanilla-js",
+    "react",
+    "search-ui",
+    "typesense-cli",
+    "docker",
+    "vue",
+    "svelte",
+    "sveltekit",
+    "angular",
+    "vite"
   ],
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
@@ -34,7 +54,12 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check",
+    "e2e": "node scripts/e2e.mjs",
+    "lint": "biome check",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
@@ -42,7 +67,10 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^26.1.2",
+    "husky": "^9.1.7",
+    "playwright": "^1.64.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

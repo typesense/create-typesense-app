@@ -1,12 +1,13 @@
 import TypesenseInstantSearchAdapter from 'typesense-instantsearch-adapter'
+import config from '../typesense.config.json'
 
 /**
  * Connects the browser to Typesense.
  *
  * Everything here is read from a VITE_ variable, which means it ships to the
  * browser. That is deliberate: the only key in this file is the search-only key,
- * which can run searches against one collection and nothing else. It cannot add
- * documents, drop the collection, or create further keys.
+ * which can search the collections in typesense.config.json and nothing else. It
+ * cannot add documents, drop a collection, or create further keys.
  *
  * The admin key sits in the same .env file WITHOUT the VITE_ prefix, and Vite
  * refuses to expose unprefixed variables to client code. Only scripts/seed.js
@@ -22,7 +23,15 @@ function required(name) {
   return value
 }
 
-export const collectionName = required('VITE_TYPESENSE_COLLECTION')
+/**
+ * What the UI searches, facets and shows, per collection (or alias). Written by
+ * create-typesense-app; edit freely.
+ */
+export const collections = config.collections.map(({ name, search }) => ({ name, search }))
+const [first] = collections
+if (first === undefined) {
+  throw new Error('typesense.config.json lists no collections. Re-run create-typesense-app.')
+}
 
 const adapter = new TypesenseInstantSearchAdapter({
   server: {
@@ -37,18 +46,16 @@ const adapter = new TypesenseInstantSearchAdapter({
     // Results are cached briefly so typing does not re-fetch the same query.
     cacheSearchResultsForSeconds: 2 * 60,
   },
-  additionalSearchParameters: {
-    /**
-     * Which fields a query is matched against. `authors` is here as well as
-     * `title` so a misspelled author name ("tolkein") finds their books.
-     *
-     * Ranking comes from the collection's `default_sorting_field`
-     * (`ratings_count`, see scripts/schema.js): it breaks ties between equally
-     * good text matches in favour of the better-known book, which is why
-     * "hary potr" puts Philosopher's Stone first.
-     */
-    query_by: 'title,authors',
-  },
+  /**
+   * Which fields a query is matched against, per collection, from
+   * typesense.config.json. Ranking ties are broken by each schema's
+   * `default_sorting_field`, which is why "hary potr" puts the best-known Harry
+   * Potter book first.
+   */
+  additionalSearchParameters: { query_by: first.search.queryBy.join(',') },
+  collectionSpecificSearchParameters: Object.fromEntries(
+    collections.map(({ name, search }) => [name, { query_by: search.queryBy.join(',') }]),
+  ),
 })
 
 export const searchClient = adapter.searchClient

@@ -43,10 +43,7 @@ export async function applyOverlay(filesDir: string, targetDir: string): Promise
  * CLI is free to stop shipping a file between releases, and that should not fail
  * a scaffold.
  */
-export async function removeSuperseded(
-  targetDir: string,
-  paths: string[],
-): Promise<string[]> {
+export async function removeSuperseded(targetDir: string, paths: string[]): Promise<string[]> {
   const root = path.resolve(targetDir)
   const removed: string[] = []
 

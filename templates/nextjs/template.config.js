@@ -17,6 +17,17 @@ export default {
   },
   seedCommand: 'tsx scripts/seed.ts',
   files: 'files/',
+  // The starter's demo page styles and artwork. app/favicon.ico goes because the
+  // overlay's app/icon.png is the Typesense favicon, and Next.js would serve both.
+  remove: [
+    'app/favicon.ico',
+    'app/page.module.css',
+    'public/file.svg',
+    'public/globe.svg',
+    'public/next.svg',
+    'public/vercel.svg',
+    'public/window.svg',
+  ],
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:3000',
 }

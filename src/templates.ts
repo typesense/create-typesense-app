@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { type Dirent, existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { templatesDir } from './paths.js'
@@ -7,17 +7,13 @@ import { templatesDir } from './paths.js'
  * The templates this CLI ships, read from the templates directory rather than
  * written down here.
  *
- * Deliberate: no framework's name appears anywhere in src/, so adding or removing
- * a template is a change to templates/ alone. Only one ships today — Next.js — on
- * the grounds that a second framework doubles the surface to keep working against
- * upstream churn, for a demo whose value is the search wiring rather than the
- * framework. The manifest indirection stays because it keeps that surface
- * declarative, which is what makes adding one back contained.
+ * Deliberate: the only framework name in src/ is DEFAULT_TEMPLATE_ID, so adding
+ * or removing any other template is a change to templates/ alone.
  *
- * Sorted, so the default (the first) does not depend on filesystem order.
+ * Sorted, so the order does not depend on the filesystem, with the default first.
  */
 function discoverTemplateIds(): string[] {
-  let entries
+  let entries: Dirent[]
   try {
     entries = readdirSync(templatesDir, { withFileTypes: true })
   } catch (error) {
@@ -31,12 +27,17 @@ function discoverTemplateIds(): string[] {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort()
+    // The first id is the `--yes` default, so it must not change when a template sorts before it.
+    .sort((a, b) => Number(b === DEFAULT_TEMPLATE_ID) - Number(a === DEFAULT_TEMPLATE_ID))
 
   if (ids.length === 0) {
     throw new Error(`No templates found in ${templatesDir}. The installation looks incomplete.`)
   }
   return ids
 }
+
+/** What `--yes` scaffolds, and the first choice in the framework prompt. */
+export const DEFAULT_TEMPLATE_ID = 'nextjs'
 
 export const TEMPLATE_IDS: readonly string[] = discoverTemplateIds()
 export type TemplateId = string
@@ -83,9 +84,8 @@ export class TemplateManifestError extends Error {
 
 /**
  * Every key the contract currently defines. Unknown keys are rejected rather
- * than ignored: a typo'd field would otherwise fail silently, and PLAN.md §5
- * expects the contract to grow explicitly (add the field here, then document it
- * in templates/README.md).
+ * than ignored: a typo'd field would otherwise fail silently. The contract grows
+ * explicitly: add the field here, then document it in templates/README.md.
  */
 const MANIFEST_KEYS = [
   'id',
@@ -107,11 +107,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function requireString(
-  record: Record<string, unknown>,
-  key: string,
-  source: string,
-): string {
+function requireString(record: Record<string, unknown>, key: string, source: string): string {
   const value = record[key]
   if (typeof value !== 'string' || value.trim() === '') {
     throw new TemplateManifestError(source, `"${key}" must be a non-empty string`)
@@ -136,11 +132,7 @@ function rejectUnknownKeys(
 }
 
 /** Reject anything that would escape the project directory. */
-function requireRelativePath(
-  value: string,
-  key: string,
-  source: string,
-): string {
+function requireRelativePath(value: string, key: string, source: string): string {
   if (path.isAbsolute(value)) {
     throw new TemplateManifestError(source, `"${key}" must be relative, got "${value}"`)
   }
@@ -275,10 +267,7 @@ export async function loadTemplate(id: string): Promise<TemplateManifest> {
   }
 
   const loaded: unknown = await import(pathToFileURL(configPath).href)
-  const manifest = validateManifest(
-    isRecord(loaded) ? loaded['default'] : undefined,
-    source,
-  )
+  const manifest = validateManifest(isRecord(loaded) ? loaded['default'] : undefined, source)
 
   if (manifest.id !== id) {
     throw new TemplateManifestError(
