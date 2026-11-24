@@ -8,8 +8,8 @@
  *   npm run build && npm run e2e -- nextjs --existing   # existing server, movies
  *
  * --existing starts its own Typesense, loads test/fixtures/movies.json (no field
- * in common with books) and runs the CLI against it with a search key, the way a
- * developer with their own server would.
+ * in common with books) and runs the CLI against it with the admin key, the way
+ * a developer with their own server would.
  *
  * Skips (exit 0) when Docker is unavailable. Never prints a key: the CLI's own
  * output names the key variables but not their values.
@@ -66,15 +66,16 @@ const run = (file, args, cwd, env = {}) =>
 
 const container = `cta-e2e-existing-${process.pid}`
 let dev
+let existingAdminKey
 try {
   const cli = [path.join(root, 'dist', 'index.js'), 'app', '--yes', '-t', id]
   if (existing) {
     console.log('\n▸ Starting a Typesense that already holds a movies collection')
     const url = 'http://localhost:8308'
-    const searchKey = await startExistingServer(url)
+    existingAdminKey = await startExistingServer(url)
     console.log(`\n▸ Scaffolding ${id} against ${url}`)
     await run('node', [...cli, '--server-url', url, '--collections', 'movies'], workDir, {
-      TYPESENSE_API_KEY: searchKey,
+      TYPESENSE_API_KEY: existingAdminKey,
     })
   } else {
     console.log(`\n▸ Scaffolding ${id} in ${appDir}`)
@@ -84,14 +85,15 @@ try {
   console.log('\n▸ Building the generated project')
   await run('npm', ['run', 'build'], appDir)
 
-  // An existing server gets only a search key, so only a local server has an admin key.
-  if (!existing) {
-    const leaks = filesContaining(appDir, adminKeyOf(appDir, manifest.env.file))
-    if (leaks.length > 0) {
-      throw new Error(`The admin key is in files the build produced: ${leaks.join(', ')}`)
-    }
-    console.log('  the admin key is in no file except the env file')
+  // A local project keeps its admin key in the env file, for the seed script. An
+  // existing server's admin key is used for the run only, so it must be in no file.
+  const leaks = existing
+    ? filesContaining(appDir, existingAdminKey, { skipEnv: false })
+    : filesContaining(appDir, adminKeyOf(appDir, manifest.env.file), { skipEnv: true })
+  if (leaks.length > 0) {
+    throw new Error(`The admin key is in files the build produced: ${leaks.join(', ')}`)
   }
+  console.log(`  the admin key is in no file${existing ? '' : ' except the env file'}`)
 
   console.log(`\n▸ Starting ${manifest.devCommand}`)
   const [command, ...args] = manifest.devCommand.split(' ')
@@ -143,8 +145,8 @@ try {
 }
 
 /**
- * Test setup, not the CLI: this server is ours to write to. Returns a key scoped
- * the way the CLI's own `curl` advice scopes one.
+ * Test setup, not the CLI: this server is ours to write to. Returns its admin
+ * key, which the CLI uses to create the browser's search-only key.
  */
 async function startExistingServer(url) {
   const { TYPESENSE_IMAGE } = await import(path.join(root, 'dist', 'constants.js'))
@@ -186,18 +188,7 @@ async function startExistingServer(url) {
     fixture.documents.map((document) => JSON.stringify(document)).join('\n'),
   )
   if (imported.includes('"success":false')) throw new Error(`Fixture import failed: ${imported}`)
-  const key = JSON.parse(
-    await admin(
-      'POST',
-      '/keys',
-      JSON.stringify({
-        description: 'create-typesense-app e2e search key',
-        actions: ['documents:search', 'collections:get', 'collections:list'],
-        collections: ['movies'],
-      }),
-    ),
-  )
-  return key.value
+  return adminKey
 }
 
 /** The admin key's value, from the env file the CLI wrote. */
@@ -213,17 +204,18 @@ function adminKeyOf(dir, envFile) {
 /**
  * Every file under `dir` that contains `secret`, so a leak shows in the built
  * output whatever the framework calls its build directory. Skips installed
- * packages and the env files, which hold the key on purpose.
+ * packages, and with `skipEnv` the env files, which hold a local admin key on
+ * purpose.
  */
-function filesContaining(dir, secret, root = dir) {
+function filesContaining(dir, secret, { skipEnv }, root = dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
       return ['node_modules', '.git'].includes(entry.name)
         ? []
-        : filesContaining(full, secret, root)
+        : filesContaining(full, secret, { skipEnv }, root)
     }
-    if (!entry.isFile() || /^\.env/.test(entry.name)) return []
+    if (!entry.isFile() || (skipEnv && /^\.env/.test(entry.name))) return []
     return readFileSync(full).includes(secret) ? [path.relative(root, full)] : []
   })
 }

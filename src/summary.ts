@@ -52,8 +52,8 @@ export function summaryLines(config: ProjectConfig): string[] {
         : `${
             server.collections.length > 0
               ? server.collections.map((name) => `"${name}"`).join(', ')
-              : 'every collection and alias the key can see'
-          } ${pc.dim('(read-only)')}`,
+              : 'every collection and alias on the server'
+          } ${pc.dim('(the CLI creates a search-only key)')}`,
     ),
     row('Install', template.deps.join(', ')),
     '',

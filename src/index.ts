@@ -15,8 +15,8 @@ import { applyOverlay, removeSuperseded } from './steps/overlay.js'
 import {
   type ExistingServerResult,
   type InspectedCollection,
+  existingServerNotice,
   inspectExistingServer,
-  readOnlyNotice,
   setUpExistingServer,
 } from './steps/existingServer.js'
 import { type ProvisionedServer, provisionServer } from './steps/provision.js'
@@ -24,7 +24,6 @@ import { ensureScaffold } from './steps/scaffold.js'
 import { type SearchSetupResult, setUpSearch } from './steps/searchSetup.js'
 import { assertAdminKeyNeverPublic, nextStepsLines, summaryLines } from './summary.js'
 import { loadTemplates } from './templates.js'
-import { CommandError, showCommand } from './util/clipboard.js'
 import { checkDocker } from './util/docker.js'
 import { clearRunState, hasRunState, markRunStarted } from './util/state.js'
 
@@ -32,14 +31,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function logError(error: unknown): Promise<void> {
-  if (error instanceof CommandError) {
-    log.error(
-      `${error.message}\nMake a search key with this command, then run the CLI again with it:`,
-    )
-    await showCommand(error.command)
-    return
-  }
+function logError(error: unknown): void {
   log.error(messageOf(error))
 }
 
@@ -95,8 +87,9 @@ async function main(): Promise<number> {
     port: cli.port,
     serverUrl: cli.serverUrl,
     collections: cli.collections,
-    // Never a flag value: that would land in shell history and CI logs.
-    apiKey: cli.apiKeyStdin
+    // An existing server's admin key. Never a flag value: that would land in shell
+    // history and CI logs.
+    adminKey: cli.apiKeyStdin
       ? readFileSync(0, 'utf8').trim()
       : process.env[ADMIN_KEY_VAR]?.trim() || undefined,
   }
@@ -112,7 +105,7 @@ async function main(): Promise<number> {
       }
     }
   } catch (error) {
-    await logError(error)
+    logError(error)
     return 1
   }
 
@@ -124,20 +117,18 @@ async function main(): Promise<number> {
   // Before the scaffold, so a refused key or a missing collection writes nothing.
   let inspected: InspectedCollection[] | undefined
   if (config.server.kind === 'byo') {
-    log.info(readOnlyNotice(config.server.url))
+    log.info(existingServerNotice(config.server.url))
     const check = spinner()
     check.start(`Checking ${config.server.url}`)
     try {
       inspected = await inspectExistingServer(config.server)
     } catch (error) {
       check.error('Could not use the existing server')
-      await logError(error)
+      logError(error)
       return 1
     }
     const names = inspected.map((collection) => `"${collection.name}"`).join(', ')
-    check.stop(
-      `The key can read ${names}, and cannot write documents or create or change collections`,
-    )
+    check.stop(`Read the schemas of ${names}`)
     for (const collection of inspected) {
       // The interactive picker already warned about these.
       if (cli.yes && collection.documents === 0) {
@@ -194,7 +185,7 @@ async function main(): Promise<number> {
     }
   } catch (error) {
     build.error('Could not set up the project')
-    await logError(error)
+    logError(error)
     return 1
   }
   build.stop(`Scaffolded ${config.template.name}`)
@@ -211,16 +202,16 @@ async function main(): Promise<number> {
       })
     } catch (error) {
       connect.error('Could not use the existing server')
-      await logError(error)
+      logError(error)
       return 1
     }
     connect.stop(
       `Wired ${existing.length} collection${existing.length === 1 ? '' : 's'} to the search UI`,
     )
     for (const { collection, found } of existing) {
-      if (found > 0) log.success(`The search key finds ${found} documents in "${collection}".`)
+      if (found > 0)
+        log.success(`The new search-only key finds ${found} documents in "${collection}".`)
     }
-    log.info(readOnlyNotice(server.url))
     await clearRunState(config.targetDir)
     note(nextStepsLines(config).join('\n'), 'Next')
     outro(`Done in ${config.projectName}.`)
@@ -240,7 +231,7 @@ async function main(): Promise<number> {
     )
   } catch (error) {
     progress.error('Could not start Typesense')
-    await logError(error)
+    logError(error)
     return 1
   }
   progress.stop(`Typesense is healthy at ${provisioned.baseUrl}`)
@@ -258,7 +249,7 @@ async function main(): Promise<number> {
     })
   } catch (error) {
     setup.error('Could not set up the collection')
-    await logError(error)
+    logError(error)
     return 1
   }
   setup.stop(`Indexed ${search.documentsImported} documents into "${search.collection}"`)

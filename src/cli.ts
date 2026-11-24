@@ -27,9 +27,9 @@ ${pc.bold('Usage')}
 ${pc.bold('Options')}
   -t, --template <id>      ${TEMPLATE_IDS.join(' | ')}
       --port <number>      host port for the local Docker server (default ${DEFAULT_PORT})
-      --server-url <url>   search an existing server instead, read-only
+      --server-url <url>   search an existing server instead (needs its admin key)
       --collections <a,b>  collections or aliases to search there (default: all)
-      --api-key-stdin      read its key from stdin (otherwise $TYPESENSE_API_KEY, or a prompt)
+      --api-key-stdin      read its admin key from stdin (otherwise $TYPESENSE_API_KEY, or a prompt)
   -y, --yes                accept defaults: ${TEMPLATE_IDS[0]}, local Docker, books sample data
   -h, --help               show this
   -v, --version            print the version

@@ -11,24 +11,16 @@ import {
   select,
   text,
 } from '@clack/prompts'
-import {
-  ADMIN_KEY_VAR,
-  DEFAULT_PORT,
-  SEARCH_KEY_VAR,
-  DEFAULT_PROJECT_NAME,
-  STATE_FILE,
-} from './constants.js'
+import { ADMIN_KEY_VAR, DEFAULT_PORT, DEFAULT_PROJECT_NAME, STATE_FILE } from './constants.js'
 import { validateServerUrl } from './cli.js'
 import { COMPOSE_FILE } from './steps/compose.js'
 import {
+  adminKeyNeeds,
+  checkAdminKey,
   inspectExistingServer,
-  keyNeeds,
-  listRefusedMessage,
-  listSearchable,
-  MAKE_KEY_AND_PASTE,
-  searchKeyCommand,
+  KeyRefusedError,
+  listCollections,
 } from './steps/existingServer.js'
-import { CommandError, showCommand } from './util/clipboard.js'
 import type { SearchConfig, SearchField } from './steps/searchConfig.js'
 import { waitForHealth } from './steps/server.js'
 import { hasRunState } from './util/state.js'
@@ -51,8 +43,8 @@ export interface PromptOptions {
   serverUrl?: string
   /** From `--collections`. */
   collections?: string[]
-  /** From `--api-key-stdin` or the environment; never from a flag value. */
-  apiKey?: string
+  /** The existing server's admin key, from `--api-key-stdin` or the environment; never from a flag value. */
+  adminKey?: string
 }
 
 /** Clack returns a symbol when the user hits Ctrl-C. Exit the way a shell expects. */
@@ -167,9 +159,9 @@ async function askServer(options: PromptOptions): Promise<ServerConfig> {
         {
           value: 'existing',
           label: 'I already have one running',
-          hint: 'read-only, bring your own URL',
+          hint: 'bring your own URL and admin key',
         },
-        { value: 'cloud', label: 'Typesense Cloud', hint: 'read-only, paste your cluster URL' },
+        { value: 'cloud', label: 'Typesense Cloud', hint: 'paste your cluster URL and admin key' },
       ],
     }),
   )
@@ -197,7 +189,7 @@ async function askServer(options: PromptOptions): Promise<ServerConfig> {
  */
 async function askExistingServer(
   kind: 'existing' | 'cloud',
-  options: Pick<PromptOptions, 'apiKey' | 'collections'>,
+  options: Pick<PromptOptions, 'adminKey' | 'collections'>,
   defaultUrl = `http://localhost:${DEFAULT_PORT}`,
   hint?: string,
 ): Promise<ServerConfig> {
@@ -215,34 +207,32 @@ async function askExistingServer(
 }
 
 /**
- * Asks for the search key until the run can use it, or the developer presses
- * Ctrl+C. The key gets the same checks the run makes: the collection list, the
- * schema and a search of each chosen collection, and the admin and write checks.
- * A key from the environment is tried first, and asked for again if it fails.
+ * Asks for the admin key until the run can use it, or the developer presses
+ * Ctrl+C. The key gets the same checks the run makes. A key from the
+ * environment is tried first, and asked for again if it fails.
  */
 async function askUntilKeyWorks(
   url: string,
   flavour: 'existing' | 'cloud',
-  options: Pick<PromptOptions, 'apiKey' | 'collections'>,
+  options: Pick<PromptOptions, 'adminKey' | 'collections'>,
   hint?: string,
 ): Promise<ServerConfig> {
-  let apiKey = options.apiKey
-  if (apiKey === undefined) {
+  let adminKey = options.adminKey
+  if (adminKey === undefined) {
     if (hint) log.info(hint)
-    log.info(keyNeeds())
-    await showCommand(searchKeyCommand(url, ['*']))
+    log.info(adminKeyNeeds())
   }
 
   for (;;) {
-    apiKey ??= await askSearchKey()
-    const checked = await checkKey(url, flavour, apiKey, options.collections)
+    adminKey ??= await askAdminKey()
+    const checked = await checkKey(url, flavour, adminKey, options.collections)
     if ('server' in checked) return checked.server
     if ('empty' in checked) {
       // The key works; a new key would not help. Keep it, and check again once
       // the developer has made a collection.
       log.warn(
-        `There are no collections on ${url} that this key can see. The search UI needs a\n` +
-          'collection with documents. Create one, for example in the Typesense Cloud dashboard.',
+        `There are no collections on ${url} yet. The search UI needs a collection with\n` +
+          'documents. Create one, for example in the Typesense Cloud dashboard.',
       )
       const next = unwrap(
         await select({
@@ -259,55 +249,50 @@ async function askUntilKeyWorks(
       }
       continue
     }
-    log.warn(`${checked.message}\n${MAKE_KEY_AND_PASTE}`)
-    await showCommand(checked.command)
-    apiKey = undefined
+    log.warn(checked.message)
+    adminKey = undefined
   }
 }
 
 /**
- * The server config for a key that works, or why it does not. A refusal is an
- * answer, not an error; a server that does not answer still throws.
+ * The server config for a key that works, or why it does not. A refused key is
+ * an answer, not an error; a server that does not answer still throws.
  */
 async function checkKey(
   url: string,
   flavour: 'existing' | 'cloud',
-  apiKey: string,
+  adminKey: string,
   named: string[] | undefined,
-): Promise<{ server: ServerConfig } | { empty: true } | { message: string; command: string }> {
-  // With --collections, the run does not need to list collections.
-  let collections = named
-  if (collections === undefined) {
-    const listing = await listSearchable(createTypesenseClient(url, apiKey))
-    if (listing.listRefused) {
-      return { message: listRefusedMessage(), command: searchKeyCommand(url, ['*']) }
-    }
-    if (listing.collections.length === 0 && listing.aliases.length === 0) return { empty: true }
-    collections = await pickCollections(listing.collections, listing.aliases)
-  }
-
-  const server: ServerConfig = { kind: 'byo', flavour, url, apiKey, collections }
+): Promise<{ server: ServerConfig } | { empty: true } | { message: string }> {
   try {
+    // Before the picker, so a wrong key does not cost a round of choices.
+    await checkAdminKey(url, adminKey)
+    // With --collections, the run does not need to list collections.
+    let collections = named
+    if (collections === undefined) {
+      const listing = await listCollections(createTypesenseClient(url, adminKey))
+      if (listing.collections.length === 0 && listing.aliases.length === 0) return { empty: true }
+      collections = await pickCollections(listing.collections, listing.aliases)
+    }
+    const server: ServerConfig = { kind: 'byo', flavour, url, adminKey, collections }
     await inspectExistingServer(server)
     return { server }
   } catch (error) {
-    if (error instanceof CommandError) return { message: error.message, command: error.command }
+    if (error instanceof KeyRefusedError) return { message: error.message }
     throw error
   }
 }
 
-/** The key prompt's check. The key is the one the browser gets. */
-export function validateSearchKey(value: string | undefined): string | undefined {
-  return (value ?? '').trim() === ''
-    ? 'Paste a search key. To make one, run the curl command above.'
-    : undefined
+/** The key prompt's check. */
+export function validateAdminKey(value: string | undefined): string | undefined {
+  return (value ?? '').trim() === '' ? "Paste the server's admin key." : undefined
 }
 
-async function askSearchKey(): Promise<string> {
+async function askAdminKey(): Promise<string> {
   return unwrap(
     await password({
-      message: 'Search key (the "value" from the curl reply)',
-      validate: validateSearchKey,
+      message: 'Admin key (used for this run only, not saved)',
+      validate: validateAdminKey,
     }),
   ).trim()
 }
@@ -477,7 +462,7 @@ export function portAction(inUse: boolean, typesense: boolean, interactive: bool
 /**
  * Settles the local server's port before anything is pulled or written.
  *
- * A Typesense already on the port can be reused, read-only, as an existing
+ * A Typesense already on the port can be reused, with its admin key, as an existing
  * server; anything else means moving to the next free port. `--yes` moves
  * without asking. The template only names the env file in the key hint.
  */
@@ -485,7 +470,7 @@ export async function settleLocalServer(
   port: number,
   interactive: boolean,
   template: TemplateManifest,
-  options: Pick<PromptOptions, 'apiKey' | 'collections'> = {},
+  options: Pick<PromptOptions, 'adminKey' | 'collections'> = {},
 ): Promise<ServerConfig> {
   const inUse = await isPortInUse(port)
   const typesense =
@@ -506,7 +491,7 @@ export async function settleLocalServer(
       await select({
         message: `Typesense already runs at localhost:${port}.`,
         options: [
-          { value: 'reuse', label: 'Use it', hint: 'read-only, asks for a search key' },
+          { value: 'reuse', label: 'Use it', hint: 'asks for its admin key' },
           { value: 'new', label: `Start a new local server on port ${next}` },
         ],
       }),
@@ -516,7 +501,7 @@ export async function settleLocalServer(
         'existing',
         options,
         `http://localhost:${port}`,
-        `If an earlier create-typesense-app run started it, its ${template.env.publicPrefix}${SEARCH_KEY_VAR} is in that project's ${template.env.file}.`,
+        `If an earlier create-typesense-app run started it, its admin key is ${ADMIN_KEY_VAR} in that project's ${template.env.file}.`,
       )
     }
   } else {
@@ -560,17 +545,20 @@ export function serverFlavour(url: string): 'cloud' | 'existing' {
 }
 
 /** `--server-url` settles the server; the key comes from the environment, stdin or a prompt. */
-function existingServerFromFlags(options: PromptOptions, apiKey: string | undefined): ServerConfig {
-  if (apiKey === undefined || apiKey === '') {
+function existingServerFromFlags(
+  options: PromptOptions,
+  adminKey: string | undefined,
+): ServerConfig {
+  if (adminKey === undefined || adminKey === '') {
     throw new Error(
-      `--server-url needs a key: set ${ADMIN_KEY_VAR} to a search key, or pipe one in with --api-key-stdin.`,
+      `--server-url needs the server's admin key: set ${ADMIN_KEY_VAR}, or pipe it in with --api-key-stdin.`,
     )
   }
   return {
     kind: 'byo',
     flavour: serverFlavour(options.serverUrl ?? ''),
     url: options.serverUrl ?? '',
-    apiKey,
+    adminKey,
     collections: options.collections ?? [],
   }
 }
@@ -597,7 +585,7 @@ export function resolveDefaults(options: PromptOptions): ProjectConfig {
       projectName,
       targetDir,
       template,
-      server: existingServerFromFlags(options, options.apiKey),
+      server: existingServerFromFlags(options, options.adminKey),
     }
   }
 

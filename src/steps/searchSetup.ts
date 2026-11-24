@@ -71,7 +71,7 @@ export async function setUpSearch(
   )
   onStep(`Indexed ${documentsImported} documents`)
 
-  const searchOnlyKey = await createSearchOnlyKey(admin, schema.name)
+  const searchOnlyKey = await createSearchOnlyKey(admin, [schema.name])
   onStep('Generated a search-only API key')
 
   // The only place the browser-visible values are written. connectionEnvValues

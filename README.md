@@ -32,7 +32,7 @@ npx create-typesense-app@latest my-search-app --yes -t nextjs
 
 Typesense starts in a container and indexes about 10,000 books.
 
-To search the user's own server, the search key must already be in the
+To search the user's own server, the server's admin key must already be in the
 `TYPESENSE_API_KEY` environment variable. Then run:
 
 ```bash
@@ -45,8 +45,9 @@ npx create-typesense-app@latest my-search-app --yes -t nextjs \
   `TYPESENSE_API_KEY` in their own shell.
 - `-t` takes a template id: `nextjs`, `angular`, `qwik`, `react`, `solid`,
   `sveltekit`, `vanilla`, or `vue`.
-- Without `--collections`, the CLI uses every collection and alias that the key can see.
-- If the key is an admin key, the CLI stops and prints the `curl` command that makes a search key.
+- Without `--collections`, the CLI uses every collection and alias on the server.
+- The CLI uses the admin key for this run only, to create a search-only key for the
+  browser. It writes only that search-only key to the project.
 
 With `--yes`, the CLI does not start the dev server. When it finishes, run
 `cd my-search-app && npm run dev`.
@@ -94,41 +95,32 @@ The project gets three npm scripts:
 ## Search your own Typesense server
 
 The CLI builds the same UI over the collections on a server that you already
-run, self-hosted or Typesense Cloud. It does not need Docker. It only reads from
-the server, and never creates, changes, or deletes anything there.
+run, self-hosted or Typesense Cloud. It does not need Docker.
 
-1. Make a search key. The browser gets this key, so the key must only read
-   schemas and search. Put your admin key in `TYPESENSE_ADMIN_API_KEY`. Put your
-   collections in `collections`, then run this command:
+The CLI asks for the server's admin key. It uses that key for this run only: to
+read the schemas, and to create one search-only key for the browser, scoped to
+the collections that you choose. The admin key is not saved anywhere. The CLI
+changes nothing else on the server. A second run in the same directory replaces
+its own search-only key, and leaves every other key alone.
 
-   ```bash
-   curl -X POST 'https://xyz.a1.typesense.net/keys' \
-     -H "X-TYPESENSE-API-KEY: $TYPESENSE_ADMIN_API_KEY" \
-     -H 'Content-Type: application/json' \
-     -d '{"description":"create-typesense-app search key","actions":["documents:search","collections:get","collections:list","aliases:list"],"collections":["products"]}'
-   ```
-
-   The response contains the key in `value`.
-2. Start the CLI:
+1. Start the CLI:
 
    ```bash
    npx create-typesense-app@latest my-search-app
    ```
 
-3. At **Typesense server?**, choose **I already have one running** or
+2. At **Typesense server?**, choose **I already have one running** or
    **Typesense Cloud**.
-4. Enter the server URL, then paste the search key. The key prompt hides what
-   you type.
-5. Select the collections and aliases to search. Each one shows its document
+3. Enter the server URL, then paste the admin key. The key prompt hides what you
+   type. If Typesense refuses the key, the CLI says so and asks again. To stop,
+   press Ctrl+C.
+4. Select the collections and aliases to search. Each one shows its document
    count.
-6. Review the search config for each collection, or change it. The config says
+5. Review the search config for each collection, or change it. The config says
    which fields the page searches, facets, and shows.
-7. The CLI starts the dev server and opens the page in your browser.
+6. The CLI starts the dev server and opens the page in your browser.
 
-The CLI checks the key before it writes anything. If the key is wrong, is an
-admin key, can write, or lacks an action, the CLI says why, prints the `curl`
-command that makes the right key, and asks for the key again. To stop, press
-Ctrl+C. To skip the key prompt, set `TYPESENSE_API_KEY` or pass
+To skip the key prompt, set `TYPESENSE_API_KEY` to the admin key, or pass
 `--api-key-stdin`.
 
 With one collection, the home page searches that collection, with its facets.
@@ -185,8 +177,8 @@ prefix, for example `NEXT_PUBLIC_`, reaches the browser.
 |---|---|---|
 | `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_PROTOCOL` | yes | Where the server is. |
 | `TYPESENSE_COLLECTION` | yes | The first collection. |
-| `TYPESENSE_SEARCH_ONLY_API_KEY` | yes | The key the browser searches with. |
-| `TYPESENSE_API_KEY` | never | The admin key. Local server only. Only `npm run seed` reads it. |
+| `TYPESENSE_SEARCH_ONLY_API_KEY` | yes | The key the browser searches with. The CLI creates it, scoped to `documents:search` on your collections. |
+| `TYPESENSE_API_KEY` | never | The admin key. Local server only: an existing server's admin key is never written. Only `npm run seed` reads it. |
 
 If the starter's `.gitignore` does not cover the env file, the CLI adds it.
 

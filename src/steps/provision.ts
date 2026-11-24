@@ -62,7 +62,8 @@ async function assertAcceptsAdminKey(
 
 /**
  * Brings the local Typesense server up and does not return until it is healthy.
- * An existing server never comes here: the CLI only reads from it.
+ * An existing server never comes here: the CLI only reads from it and creates
+ * one search-only key there.
  *
  * Idempotent by design: an admin key from an earlier run is reused,
  * the compose file is rewritten identically, and `compose up` on an already

@@ -10,8 +10,6 @@ export interface TypesenseClient {
   listKeys(): Promise<StoredKey[]>
   deleteKey(id: number): Promise<void>
   search(name: string, params: Record<string, string>): Promise<SearchResponse>
-  /** The HTTP status of a request, whatever it is. Throws only when nothing answers. */
-  status(method: string, path: string, body?: string): Promise<number>
 }
 
 export interface KeySpec {
@@ -74,7 +72,7 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
   async function request(
     method: string,
     path: string,
-    options: { body?: string; contentType?: string; allow404?: boolean; anyStatus?: boolean } = {},
+    options: { body?: string; contentType?: string; allow404?: boolean } = {},
   ): Promise<{ status: number; text: string }> {
     let response: Response
     try {
@@ -97,9 +95,7 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
     }
 
     const text = await response.text()
-    const allowed =
-      options.anyStatus === true || (options.allow404 === true && response.status === 404)
-    if (!response.ok && !allowed) {
+    if (!response.ok && !(options.allow404 === true && response.status === 404)) {
       throw new TypesenseError(
         `Typesense replied ${response.status} to ${method} ${path}: ${text.slice(0, 300)}`,
         response.status,
@@ -181,16 +177,6 @@ export function createTypesenseClient(baseUrl: string, apiKey: string): Typesens
         'GET',
         `/collections/${encodeURIComponent(name)}/documents/search?${query}`,
       )
-    },
-
-    async status(method, path, body) {
-      const options = { anyStatus: true, contentType: 'text/plain' }
-      const { status } = await request(
-        method,
-        path,
-        body === undefined ? options : { ...options, body },
-      )
-      return status
     },
   }
 }

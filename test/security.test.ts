@@ -11,9 +11,13 @@ import {
   upsertEnvContents,
   writeEnvFile,
 } from '../src/steps/env.js'
-import { inspectExistingServer, searchKeyCommand } from '../src/steps/existingServer.js'
+import {
+  inspectExistingServer,
+  KeyRefusedError,
+  setUpExistingServer,
+} from '../src/steps/existingServer.js'
 import { createSearchOnlyKey, SEARCH_KEY_DESCRIPTION } from '../src/steps/keys.js'
-import { CommandError } from '../src/util/clipboard.js'
+import { loadTemplate } from '../src/templates.js'
 import type { TypesenseClient } from '../src/util/typesense.js'
 
 /**
@@ -81,10 +85,11 @@ describe('the env file', () => {
 })
 
 describe('the browser key', () => {
-  it('can only search one collection, and a re-run replaces only keys this CLI made', async () => {
+  it('can only search the given collections, and a re-run replaces only keys with its description', async () => {
     const keys = [
       { id: 1, description: SEARCH_KEY_DESCRIPTION },
       { id: 2, description: 'a key someone else made' },
+      { id: 3, description: `${SEARCH_KEY_DESCRIPTION} for another-project-123abc` },
     ]
     const created: object[] = []
     const client = {
@@ -97,51 +102,59 @@ describe('the browser key', () => {
       },
       createKey: async (spec: object) => {
         created.push(spec)
-        return { id: 3, value: 'new-search-key' }
+        return { id: 4, value: 'new-search-key' }
       },
     } as unknown as TypesenseClient
 
-    expect(await createSearchOnlyKey(client, 'books')).toBe('new-search-key')
+    expect(await createSearchOnlyKey(client, ['movies', 'films'])).toBe('new-search-key')
     expect(created).toEqual([
       {
         description: SEARCH_KEY_DESCRIPTION,
         actions: ['documents:search'],
-        collections: ['books'],
+        collections: ['movies', 'films'],
       },
     ])
-    expect(keys.map((key) => key.id)).toEqual([2])
+    expect(keys.map((key) => key.id)).toEqual([2, 3])
   })
 })
 
 describe('an existing server', () => {
   const ADMIN = 'admin-key'
-  const SEARCH = 'search-key'
-  const WRITER = 'key-that-can-write-documents'
+  const SEARCH = 'a-key-that-only-searches'
+  const BROWSER = 'key-the-cli-created'
   const requests: string[] = []
+  const createdKeys: { description: string; actions: string[]; collections: string[] }[] = []
 
   // Answers like a Typesense that holds `movies` and an alias `films` for it.
-  // Only the admin key may list API keys. A write that the key may not make gets
-  // 401; one that it may make gets 404, as Typesense answers the CLI's probes.
+  // Only the admin key may manage keys; a created key may only search.
   const server = createServer((request, response) => {
     const key = request.headers['x-typesense-api-key']
     const url = request.url ?? ''
-    const reply = (status: number, body: unknown) => {
-      requests.push(`${request.method} ${status}`)
+    const reply = (status: number, body: unknown) =>
       response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body))
-    }
     const movies = { name: 'movies', num_documents: 1, fields: [{ name: 'title', type: 'string' }] }
+    requests.push(request.method ?? '')
 
     if (url === '/health') return reply(200, { ok: true })
-    if (key !== ADMIN && key !== SEARCH && key !== WRITER)
-      return reply(401, { message: 'Forbidden' })
-    if (url === '/keys') return key === ADMIN ? reply(200, { keys: [] }) : reply(401, {})
-    if (request.method !== 'GET') return key === WRITER ? reply(404, {}) : reply(401, {})
+    if (url.includes('/documents/search') && (key === ADMIN || key === SEARCH || key === BROWSER))
+      return reply(200, { found: 1, hits: [{ document: { title: 'Alien' } }] })
+    if (key !== ADMIN) return reply(401, { message: 'Forbidden' })
+    if (url === '/keys' && request.method === 'GET') return reply(200, { keys: [] })
+    if (url === '/keys' && request.method === 'POST') {
+      let body = ''
+      request.on('data', (chunk) => {
+        body += chunk
+      })
+      request.on('end', () => {
+        createdKeys.push(JSON.parse(body))
+        reply(201, { id: 1, value: BROWSER })
+      })
+      return
+    }
     if (url === '/collections') return reply(200, [movies])
     if (url === '/aliases')
       return reply(200, { aliases: [{ name: 'films', collection_name: 'movies' }] })
     if (url === '/collections/movies' || url === '/collections/films') return reply(200, movies)
-    if (url.includes('/documents/search'))
-      return reply(200, { found: 1, hits: [{ document: { title: 'Alien' } }] })
     return reply(404, { message: 'Not Found' })
   })
   const url = new Promise<string>((resolve) =>
@@ -151,48 +164,49 @@ describe('an existing server', () => {
   )
   afterAll(() => new Promise((resolve) => server.close(resolve)))
 
-  const existing = async (apiKey: string, collections: string[] = []) => ({
+  const existing = async (adminKey: string, collections: string[] = []) => ({
     kind: 'byo' as const,
     flavour: 'existing' as const,
     url: await url,
-    apiKey,
+    adminKey,
     collections,
   })
 
-  it('refuses an admin key, and prints a command that makes a search key without showing a key', async () => {
-    const error = await inspectExistingServer(await existing(ADMIN, ['movies'])).catch(
-      (caught: unknown) => caught,
-    )
-    expect(error).toBeInstanceOf(CommandError)
-    expect((error as CommandError).message).toMatch(/can manage API keys/)
-    expect((error as CommandError).command).toContain('$TYPESENSE_ADMIN_API_KEY')
-    expect((error as CommandError).command).not.toContain(ADMIN)
+  it('refuses a key that cannot manage API keys', async () => {
+    await expect(inspectExistingServer(await existing(SEARCH))).rejects.toThrow(KeyRefusedError)
   })
 
-  it('refuses a key that can write, and accepts a search key, whose every write is refused', async () => {
-    const error = await inspectExistingServer(await existing(WRITER)).catch(
-      (caught: unknown) => caught,
-    )
-    expect(error).toBeInstanceOf(CommandError)
-    expect((error as CommandError).message).toMatch(/can create collections, delete documents/)
-
+  it('reads with GET only, then gives the browser a new key that can only search the chosen collections', async () => {
     requests.length = 0
-    const inspected = await inspectExistingServer(await existing(SEARCH))
+    const inspected = await inspectExistingServer(await existing(ADMIN))
     expect(inspected.map((collection) => collection.name)).toEqual(['movies', 'films'])
-    const writes = requests.filter((entry) => !entry.startsWith('GET '))
-    expect(writes.length).toBeGreaterThan(0)
-    expect(new Set(writes)).toEqual(new Set(['DELETE 401', 'POST 401', 'PATCH 401']))
-  })
+    expect(new Set(requests)).toEqual(new Set(['GET']))
 
-  it('makes the suggested key cover the collection that an alias points to', () => {
-    const command = searchKeyCommand('https://xyz.a1.typesense.net', ['films', 'movies'])
-    const spec = JSON.parse(/-d '(.*)'$/m.exec(command)?.[1] ?? '{}')
-    expect(spec.collections).toEqual(['films', 'movies'])
-    expect(spec.actions).toEqual([
-      'documents:search',
-      'collections:get',
-      'collections:list',
-      'aliases:list',
+    const targetDir = await tempDir()
+    const template = await loadTemplate('vanilla')
+    const results = await setUpExistingServer(
+      { projectName: 'app', targetDir, template, server: await existing(ADMIN) },
+      inspected,
+    )
+
+    // One key: search only, on each chosen name and the collection behind the alias.
+    expect(createdKeys).toHaveLength(1)
+    expect(createdKeys[0]).toMatchObject({
+      actions: ['documents:search'],
+      collections: ['movies', 'films'],
+    })
+    expect(createdKeys[0]?.description).toMatch(/^create-typesense-app search-only key for app-/)
+    expect(results).toEqual([
+      { collection: 'movies', found: 1 },
+      { collection: 'films', found: 1 },
     ])
+
+    // The browser gets the new key; the admin key reaches no file.
+    const env = parseEnvContents(await readFile(path.join(targetDir, '.env'), 'utf8'))
+    expect(env[`VITE_${SEARCH_KEY_VAR}`]).toBe(BROWSER)
+    expect(Object.values(env)).not.toContain(ADMIN)
+    expect(await readFile(path.join(targetDir, 'typesense.config.json'), 'utf8')).not.toContain(
+      ADMIN,
+    )
   })
 })
